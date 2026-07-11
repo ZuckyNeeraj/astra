@@ -19,3 +19,8 @@ convex/_generated/
 .venv/
 __pycache__/
 *.pyc
+
+# Convex AI-assistant skill scaffolding (regenerate: npx convex ai-files install)
+.agents/
+.claude/skills/convex*/
+skills-lock.json

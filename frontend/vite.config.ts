@@ -28,7 +28,15 @@ export default defineConfig({
     alias: {
       // Alias @ to the src directory
       '@': path.resolve(__dirname, './src'),
+      // Alias @convex to the repo-root convex/ dir (schema + generated client
+      // live one level up, shared with the agents service).
+      '@convex': path.resolve(__dirname, '../convex'),
     },
+  },
+
+  // Allow importing the generated Convex client from the parent dir during dev.
+  server: {
+    fs: { allow: ['..'] },
   },
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
