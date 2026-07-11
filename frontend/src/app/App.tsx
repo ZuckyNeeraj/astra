@@ -5,6 +5,7 @@ import {
   AlertCircle, ArrowRight, Stethoscope, CheckCircle2, Timer, RefreshCw,
   ShieldCheck, Receipt, Circle, Eye, Download, ChevronRight, Settings,
   User, TrendingUp, MoreHorizontal, Calendar, Activity, Menu, LogOut,
+  RotateCcw,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -1485,10 +1486,13 @@ function VoiceScreen() {
 
 // ── Main App ────────────────────────────────────────────────────────────────
 
-// "Scan inbox" — pulls "Health Report" emails from the last 30 minutes (Gmail).
+// "Scan inbox" — pulls every email from the last 30 days whose subject starts
+// with "Health Report" (Gmail); each becomes a candidate journey to choose from.
 function ScanInboxButton({ variant = "solid" }: { variant?: "solid" | "ghost" }) {
   const scan = useAction(api.inbox.scanInbox);
+  const resetDemo = useMutation(api.inbox.resetDemoData);
   const [busy, setBusy] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   async function run() {
@@ -1508,6 +1512,19 @@ function ScanInboxButton({ variant = "solid" }: { variant?: "solid" | "ghost" })
     }
   }
 
+  async function reset() {
+    setResetting(true);
+    setMsg(null);
+    try {
+      await resetDemo();
+      setMsg("Demo data reset — scan again to re-surface candidates.");
+    } catch {
+      setMsg("Reset failed.");
+    } finally {
+      setResetting(false);
+    }
+  }
+
   const cls =
     variant === "solid"
       ? "bg-[#0EA5E9] text-white hover:bg-[#0284C7]"
@@ -1515,29 +1532,46 @@ function ScanInboxButton({ variant = "solid" }: { variant?: "solid" | "ghost" })
 
   return (
     <div className={`flex flex-col gap-1.5 ${variant === "ghost" ? "items-end" : "items-center"}`}>
-      <button
-        onClick={run}
-        disabled={busy}
-        className={`flex items-center gap-2 text-xs font-bold px-4 py-2.5 rounded-xl transition disabled:opacity-60 ${cls}`}
-      >
-        <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
-        {busy ? "Scanning inbox…" : "Scan inbox"}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={run}
+          disabled={busy || resetting}
+          className={`flex items-center gap-2 text-xs font-bold px-4 py-2.5 rounded-xl transition disabled:opacity-60 ${cls}`}
+        >
+          <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+          {busy ? "Scanning inbox…" : "Scan inbox"}
+        </button>
+        <button
+          onClick={reset}
+          disabled={busy || resetting}
+          title="Clear ingested reports & dismissed candidates so a fresh scan re-surfaces them (demo)"
+          className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-2.5 rounded-xl transition disabled:opacity-60 text-[#94A3B8] bg-transparent hover:bg-[#F1F5F9] hover:text-[#64748B]"
+        >
+          <RotateCcw size={13} className={resetting ? "animate-spin" : ""} />
+          {resetting ? "Resetting…" : "Reset demo"}
+        </button>
+      </div>
       {msg && <p className="text-[11px] text-[#64748B]">{msg}</p>}
     </div>
   );
 }
 
-// Modal shown when a health report has produced a treatment suggestion to verify.
+// Modal shown when one or more health reports have produced candidate journeys.
+// Each "Health Report" email becomes one candidate — the user picks which one to
+// start. When several are pending, a selector strip lets them switch between them.
 function SuggestionModal() {
   const proposed = useQuery(api.treatment.proposed);
   const approve = useMutation(api.treatment.approve);
   const reject = useMutation(api.treatment.reject);
   const [busy, setBusy] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const entry = proposed?.[0];
+  const entries = proposed ?? [];
+  // Keep the selection valid as plans get approved/dismissed; default to the first.
+  const entry = entries.find((e) => e.plan._id === selectedId) ?? entries[0];
   if (!entry) return null;
   const { plan, report, email } = entry;
+  const multiple = entries.length > 1;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(15,23,42,0.45)" }}>
@@ -1546,13 +1580,48 @@ function SuggestionModal() {
         <div className="p-6 text-white" style={{ background: "linear-gradient(135deg,#0284C7,#0EA5E9 45%,#14B8A6)" }}>
           <div className="flex items-center gap-2 mb-2">
             <PulseDot color="white" />
-            <span className="text-[11px] font-black tracking-widest opacity-90">NEW HEALTH REPORT DETECTED</span>
+            <span className="text-[11px] font-black tracking-widest opacity-90">
+              {multiple ? `${entries.length} HEALTH REPORTS DETECTED` : "NEW HEALTH REPORT DETECTED"}
+            </span>
           </div>
           <h2 className="text-2xl font-black tracking-tight" style={{ fontFamily: "'Outfit', sans-serif" }}>
             {report?.patientName ? `${report.patientName} · ` : ""}{report?.condition ?? "Report"}
           </h2>
           {email && <p className="text-xs opacity-80 mt-1">From {email.from} · {email.subject}</p>}
         </div>
+
+        {/* Candidate selector — only when more than one report is pending. */}
+        {multiple && (
+          <div className="px-6 pt-4">
+            <p className="text-[11px] font-black text-[#94A3B8] tracking-widest mb-2">
+              CHOOSE A JOURNEY TO START
+            </p>
+            <div className="flex flex-col gap-2 max-h-40 overflow-y-auto">
+              {entries.map((e) => {
+                const active = e.plan._id === entry.plan._id;
+                return (
+                  <button
+                    key={e.plan._id}
+                    onClick={() => setSelectedId(e.plan._id)}
+                    className={`text-left px-3 py-2.5 rounded-xl border transition ${
+                      active
+                        ? "border-[#0EA5E9] bg-[#F0F9FF]"
+                        : "border-[rgba(15,23,42,0.1)] bg-white hover:bg-[#F8FAFF]"
+                    }`}
+                  >
+                    <p className="text-sm font-bold text-[#0F172A] truncate">
+                      {e.report?.patientName ? `${e.report.patientName} · ` : ""}
+                      {e.report?.condition ?? e.plan.recommendedProcedure}
+                    </p>
+                    <p className="text-[11px] text-[#64748B] truncate">
+                      {e.email?.subject ?? e.plan.summary}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Body */}
         <div className="p-6 flex flex-col gap-4">

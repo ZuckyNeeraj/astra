@@ -1,12 +1,14 @@
-import { action, internalAction, internalMutation, internalQuery } from "./_generated/server";
+import { action, internalAction, internalMutation, internalQuery, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Real Gmail ingestion. "Scan inbox" (scanInbox) and the 1-min cron (pollGmail)
-// both pull emails from the LAST 30 DAYS whose subject is "Health Report",
-// then create an email + a placeholder report + a *proposed* treatment plan.
+// both pull emails from the LAST 30 DAYS whose subject STARTS WITH "Health
+// Report", then create — for EACH matching email — an email row + a placeholder
+// report + a *proposed* treatment plan (one candidate journey per report).
+// The user picks which candidate journey to start in the Home suggestion modal.
 //
 // The treatment content is a placeholder for now ("Awaiting AI analysis") — the
 // analysis agent that fills the modal is built tomorrow.
@@ -22,7 +24,14 @@ const STAGES = [
 
 type GmailReport = { gmailId: string; from: string; subject: string; snippet: string };
 
-// Pull "Health Report" emails from the last 30 minutes via the Gmail REST API.
+// A subject counts as a health report only when it STARTS WITH "Health Report"
+// (case-insensitive, ignoring any leading whitespace). Gmail's `subject:` search
+// can only match the phrase anywhere, so we anchor the prefix ourselves here.
+function isHealthReportSubject(subject: string): boolean {
+  return subject.trimStart().toLowerCase().startsWith("health report");
+}
+
+// Pull "Health Report" emails from the last 30 days via the Gmail REST API.
 async function fetchGmailReports(): Promise<
   { ok: true; reports: GmailReport[] } | { ok: false; reason: string }
 > {
@@ -63,10 +72,13 @@ async function fetchGmailReports(): Promise<
     );
     const msg = await msgRes.json();
     const headers: Array<{ name: string; value: string }> = msg.payload?.headers ?? [];
+    const subject = headers.find((h) => h.name === "Subject")?.value ?? "";
+    // Anchor to the prefix — skip anything that merely mentions "health report".
+    if (!isHealthReportSubject(subject)) continue;
     reports.push({
       gmailId: id,
       from: headers.find((h) => h.name === "From")?.value ?? "unknown",
-      subject: headers.find((h) => h.name === "Subject")?.value ?? "Health Report",
+      subject,
       snippet: msg.snippet ?? "",
     });
   }
@@ -112,6 +124,42 @@ export const ingestEmail = internalMutation({
       createdAt: now,
     });
     return emailId;
+  },
+});
+
+// Demo utility — wipe ingested emails/reports/proposed+rejected plans so a fresh
+// scan re-surfaces every candidate. Keeps approved plans + journeys intact.
+// Handy to reset ALL users between demo runs: `npx convex run inbox:resetPipeline`.
+export const resetPipeline = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    let removed = { emails: 0, reports: 0, plans: 0 };
+    for (const e of await ctx.db.query("emails").collect()) { await ctx.db.delete(e._id); removed.emails++; }
+    for (const r of await ctx.db.query("reports").collect()) {
+      if (!r.journeyId) { await ctx.db.delete(r._id); removed.reports++; }
+    }
+    for (const p of await ctx.db.query("treatmentPlans").collect()) {
+      if (p.status !== "approved") { await ctx.db.delete(p._id); removed.plans++; }
+    }
+    return removed;
+  },
+});
+
+// "Reset demo data" button — same as resetPipeline but scoped to the signed-in
+// user, so a fresh Scan inbox re-surfaces their dismissed/ingested candidates.
+export const resetDemoData = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    let removed = { emails: 0, reports: 0, plans: 0 };
+    const emails = await ctx.db.query("emails").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
+    for (const e of emails) { await ctx.db.delete(e._id); removed.emails++; }
+    const reports = await ctx.db.query("reports").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
+    for (const r of reports) { if (!r.journeyId) { await ctx.db.delete(r._id); removed.reports++; } }
+    const plans = await ctx.db.query("treatmentPlans").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
+    for (const p of plans) { if (p.status !== "approved") { await ctx.db.delete(p._id); removed.plans++; } }
+    return removed;
   },
 });
 

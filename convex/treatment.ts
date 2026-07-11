@@ -79,6 +79,18 @@ export const approve = mutation({
     await ctx.db.patch(id, { status: "approved", journeyId });
     if (report) await ctx.db.patch(report._id, { journeyId });
 
+    // Picking one candidate dismisses the rest — reject the user's other
+    // still-proposed plans so the suggestion modal closes on approval.
+    const others = await ctx.db
+      .query("treatmentPlans")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    for (const p of others) {
+      if (p._id !== id && p.status === "proposed") {
+        await ctx.db.patch(p._id, { status: "rejected" });
+      }
+    }
+
     return journeyId;
   },
 });
