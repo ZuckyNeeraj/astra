@@ -1581,7 +1581,7 @@ function SuggestionModal() {
           <div className="flex items-center gap-2 mb-2">
             <PulseDot color="white" />
             <span className="text-[11px] font-black tracking-widest opacity-90">
-              {multiple ? `${entries.length} HEALTH REPORTS DETECTED` : "NEW HEALTH REPORT DETECTED"}
+              {multiple ? `${entries.length} CARE OPTIONS DETECTED` : "NEW HEALTH REPORT DETECTED"}
             </span>
           </div>
           <h2 className="text-2xl font-black tracking-tight" style={{ fontFamily: "'Outfit', sans-serif" }}>
@@ -1610,11 +1610,12 @@ function SuggestionModal() {
                     }`}
                   >
                     <p className="text-sm font-bold text-[#0F172A] truncate">
-                      {e.report?.patientName ? `${e.report.patientName} · ` : ""}
-                      {e.report?.condition ?? e.plan.recommendedProcedure}
+                      {e.plan.recommendedProcedure}
                     </p>
                     <p className="text-[11px] text-[#64748B] truncate">
-                      {e.email?.subject ?? e.plan.summary}
+                      {e.report?.patientName ? `${e.report.patientName} · ` : ""}
+                      {e.report?.condition ?? e.plan.summary}
+                      {e.plan.estCostInr ? ` · ${inr(e.plan.estCostInr)}` : ""}
                     </p>
                   </button>
                 );

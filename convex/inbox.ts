@@ -123,6 +123,12 @@ export const ingestEmail = internalMutation({
       status: "proposed",
       createdAt: now,
     });
+
+    // Kick off the analysis agent — it replaces the placeholder report fields +
+    // treatment plan with a real diagnosis and treatment option(s). No-ops if
+    // OPENAI_API_KEY isn't set, leaving the placeholders above in place.
+    await ctx.scheduler.runAfter(0, internal.analysis.analyzeReport, { reportId });
+
     return emailId;
   },
 });
