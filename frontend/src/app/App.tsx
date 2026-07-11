@@ -10,7 +10,7 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@convex/_generated/api";
 
@@ -1068,78 +1068,125 @@ function InsuranceScreen() {
 
 // ── Screen 6: Vault ─────────────────────────────────────────────────────────
 
+// The must-have documents for the demo journey.
+const REQUIRED_DOCS = [
+  { label: "Insurance Policy",      type: "Insurance",     category: "insurance", icon: Shield,      color: "#0EA5E9" },
+  { label: "Aadhaar Card",          type: "Government ID", category: "identity",  icon: ShieldCheck, color: "#8B5CF6" },
+  { label: "PAN Card",              type: "Government ID", category: "identity",  icon: CreditCard,  color: "#14B8A6" },
+  { label: "Doctor's Prescription", type: "Prescription",  category: "medical",   icon: Stethoscope, color: "#F59E0B" },
+];
+
 function VaultScreen() {
-  const docs = [
-    { name: "Insurance Card",         type: "ID Card",            date: "Valid till Dec 2025",  icon: CreditCard,  color: "#0EA5E9", ok: true  },
-    { name: "Aadhaar Card",           type: "Government ID",      date: "Updated Jul 2023",     icon: ShieldCheck, color: "#8B5CF6", ok: true  },
-    { name: "MRI Report",             type: "Radiology Report",   date: "Jun 25, 2025",         icon: FileText,    color: "#14B8A6", ok: true  },
-    { name: "X-Ray Report",           type: "Radiology Report",   date: "Jun 20, 2025",         icon: Eye,         color: "#14B8A6", ok: true  },
-    { name: "Doctor's Prescription",  type: "Prescription",       date: "Jun 28, 2025",         icon: Stethoscope, color: "#F59E0B", ok: true  },
-    { name: "Discharge Summary",      type: "Hospital Document",  date: "Not yet available",    icon: FileText,    color: "#EF4444", ok: false },
-    { name: "Hospital Bills",         type: "Financial Document", date: "Not yet available",    icon: Receipt,     color: "#EF4444", ok: false },
-  ];
+  const items = useQuery(api.vault.list);
+  const generateUploadUrl = useMutation(api.vault.generateUploadUrl);
+  const save = useMutation(api.vault.save);
+  const remove = useMutation(api.vault.remove);
+  const [uploading, setUploading] = useState<string | null>(null);
+
+  const byLabel = new Map((items ?? []).map((i) => [i.label, i] as const));
+  const uploadedCount = REQUIRED_DOCS.filter((d) => byLabel.has(d.label)).length;
+  const extras = (items ?? []).filter((i) => !REQUIRED_DOCS.some((d) => d.label === i.label));
+
+  async function upload(file: File, doc: { label: string; category: string }) {
+    setUploading(doc.label);
+    try {
+      const url = await generateUploadUrl();
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": file.type }, body: file });
+      const { storageId } = await res.json();
+      await save({ category: doc.category, label: doc.label, storageId });
+    } finally {
+      setUploading(null);
+    }
+  }
 
   return (
     <>
-      <TopBar title="Document Vault" subtitle="7 documents tracked · 2 required for claim filing" />
+      <TopBar title="Document Vault" subtitle={`${uploadedCount} of ${REQUIRED_DOCS.length} required documents uploaded`} />
       <div className="p-8 flex flex-col gap-6">
-        {/* Alert */}
-        <div className="bg-[#FEF2F2] border border-[#FCA5A5] rounded-2xl p-5 flex items-start gap-4">
-          <div className="w-10 h-10 bg-[#FEE2E2] rounded-xl flex items-center justify-center flex-shrink-0">
-            <AlertCircle size={18} className="text-[#EF4444]" />
-          </div>
-          <div className="flex-1">
-            <p className="font-bold text-[#0F172A]">2 documents required for claim filing</p>
-            <p className="text-sm text-[#64748B] mt-0.5">Discharge summary and hospital bills will be needed after surgery. Document Agent will collect these automatically post-discharge.</p>
-          </div>
-          <button className="text-xs font-bold text-[#EF4444] hover:underline">Learn more</button>
-        </div>
-
-        {/* Document grid */}
+        {/* Required documents */}
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-          {docs.map((doc) => (
-            <div key={doc.name} className={`bg-white rounded-2xl p-5 border flex flex-col ${doc.ok ? "border-[rgba(15,23,42,0.06)]" : "border-[#FCA5A5] bg-[#FFF8F8]"}`}>
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${doc.color}18` }}>
-                  <doc.icon size={18} style={{ color: doc.color }} />
-                </div>
-                {doc.ok ? (
-                  <div className="flex gap-1.5">
-                    <button className="w-8 h-8 bg-[#F1F5F9] rounded-xl flex items-center justify-center hover:bg-[#E2E8F0] transition">
-                      <Eye size={13} className="text-[#64748B]" />
-                    </button>
-                    <button className="w-8 h-8 bg-[#F1F5F9] rounded-xl flex items-center justify-center hover:bg-[#E2E8F0] transition">
-                      <Download size={13} className="text-[#64748B]" />
-                    </button>
+          {REQUIRED_DOCS.map((doc) => {
+            const item = byLabel.get(doc.label);
+            const ok = !!item;
+            const isUp = uploading === doc.label;
+            return (
+              <div key={doc.label} className={`bg-white rounded-2xl p-5 border flex flex-col ${ok ? "border-[rgba(15,23,42,0.06)]" : "border-[#FCA5A5] bg-[#FFF8F8]"}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${doc.color}18` }}>
+                    <doc.icon size={18} style={{ color: doc.color }} />
                   </div>
-                ) : (
-                  <span className="text-[9px] font-black bg-[#FEE2E2] text-[#EF4444] px-2 py-0.5 rounded-full tracking-widest">MISSING</span>
-                )}
+                  {ok ? (
+                    <div className="flex gap-1.5">
+                      {item!.url && (
+                        <a href={item!.url} target="_blank" rel="noreferrer" title="View" className="w-8 h-8 bg-[#F1F5F9] rounded-xl flex items-center justify-center hover:bg-[#E2E8F0] transition">
+                          <Eye size={13} className="text-[#64748B]" />
+                        </a>
+                      )}
+                      <button onClick={() => void remove({ id: item!._id })} title="Remove" className="w-8 h-8 bg-[#F1F5F9] rounded-xl flex items-center justify-center hover:bg-[#FEE2E2] transition">
+                        <X size={13} className="text-[#64748B]" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[9px] font-black bg-[#FEE2E2] text-[#EF4444] px-2 py-0.5 rounded-full tracking-widest">MISSING</span>
+                  )}
+                </div>
+                <p className="font-bold text-[#0F172A] text-sm mb-0.5">{doc.label}</p>
+                <p className="text-xs text-[#64748B] mb-4">{doc.type}</p>
+                <div className="mt-auto flex items-center justify-between">
+                  <span className="text-[11px] text-[#94A3B8] font-mono">{ok ? "Uploaded" : "Not uploaded"}</span>
+                  <label className={`flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg cursor-pointer transition ${ok ? "bg-[#F1F5F9] text-[#64748B] hover:bg-[#E2E8F0]" : "bg-[#0EA5E9] text-white hover:bg-[#0284C7]"}`}>
+                    <Upload size={11} /> {isUp ? "Uploading…" : ok ? "Replace" : "Upload"}
+                    <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" disabled={isUp}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, doc); e.target.value = ""; }} />
+                  </label>
+                </div>
               </div>
-              <p className="font-bold text-[#0F172A] text-sm mb-0.5">{doc.name}</p>
-              <p className="text-xs text-[#64748B] mb-4">{doc.type}</p>
-              <div className="mt-auto flex items-center justify-between">
-                <span className="text-[11px] text-[#94A3B8] font-mono">{doc.date}</span>
-                {!doc.ok && (
-                  <button className="flex items-center gap-1.5 bg-[#EF4444] text-white text-[11px] font-bold px-3 py-1.5 rounded-lg hover:bg-[#DC2626] transition">
-                    <Upload size={11} /> Upload
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        {/* Upload zone */}
-        <button className="flex items-center justify-center gap-3 w-full py-6 border-2 border-dashed border-[#CBD5E1] rounded-2xl text-[#64748B] font-semibold hover:border-[#0EA5E9] hover:text-[#0EA5E9] hover:bg-[#EFF6FF] transition-all group">
+        {/* Other uploaded documents */}
+        {extras.length > 0 && (
+          <div>
+            <p className="font-bold text-[#0F172A] text-sm mb-3">Other documents</p>
+            <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+              {extras.map((item) => (
+                <div key={item._id} className="bg-white rounded-2xl p-5 border border-[rgba(15,23,42,0.06)] flex flex-col">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#64748B18" }}>
+                      <FileText size={18} style={{ color: "#64748B" }} />
+                    </div>
+                    <div className="flex gap-1.5">
+                      {item.url && (
+                        <a href={item.url} target="_blank" rel="noreferrer" title="View" className="w-8 h-8 bg-[#F1F5F9] rounded-xl flex items-center justify-center hover:bg-[#E2E8F0] transition">
+                          <Eye size={13} className="text-[#64748B]" />
+                        </a>
+                      )}
+                      <button onClick={() => void remove({ id: item._id })} title="Remove" className="w-8 h-8 bg-[#F1F5F9] rounded-xl flex items-center justify-center hover:bg-[#FEE2E2] transition">
+                        <X size={13} className="text-[#64748B]" />
+                      </button>
+                    </div>
+                  </div>
+                  <p className="font-bold text-[#0F172A] text-sm mb-0.5 truncate">{item.label}</p>
+                  <p className="text-xs text-[#64748B] capitalize">{item.category}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Upload any other document */}
+        <label className="flex items-center justify-center gap-3 w-full py-6 border-2 border-dashed border-[#CBD5E1] rounded-2xl text-[#64748B] font-semibold hover:border-[#0EA5E9] hover:text-[#0EA5E9] hover:bg-[#EFF6FF] transition-all group cursor-pointer">
           <div className="w-10 h-10 bg-[#F1F5F9] group-hover:bg-[#DBEAFE] rounded-xl flex items-center justify-center transition-colors">
             <Upload size={18} className="text-[#64748B] group-hover:text-[#0EA5E9] transition-colors" />
           </div>
           <div className="text-left">
-            <p className="font-bold">Upload New Document</p>
+            <p className="font-bold">Upload another document</p>
             <p className="text-xs text-[#94A3B8] font-normal">PDF, JPG, PNG up to 20 MB</p>
           </div>
-        </button>
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, { label: f.name, category: "other" }); e.target.value = ""; }} />
+        </label>
       </div>
     </>
   );
