@@ -7,7 +7,10 @@ SHELL := /bin/bash
 # Port the frontend is served on (override: `make demo PORT=5175`).
 PORT ?= 5173
 
-.PHONY: help install dev db web seed reset wipe demo stop
+.PHONY: help install dev db web build deploy seed reset wipe demo stop
+
+# Cloudflare Pages project name (override: `make deploy CF_PROJECT=my-astra`).
+CF_PROJECT ?= astra
 
 help: ## Show this help
 	@echo "Astra — available commands:"
@@ -30,6 +33,14 @@ db: ## Run only the Convex dev backend
 
 web: ## Run only the Vite frontend
 	cd frontend && npm run dev
+
+build: ## Refresh Convex codegen + build the frontend to frontend/dist
+	npx convex dev --once
+	cd frontend && npm run build
+
+deploy: build ## Build, then deploy frontend/dist to Cloudflare Pages (needs CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID)
+	@[ -n "$$CLOUDFLARE_API_TOKEN" ] || { echo "❌ Set CLOUDFLARE_API_TOKEN (and CLOUDFLARE_ACCOUNT_ID) first."; exit 1; }
+	npx wrangler pages deploy frontend/dist --project-name=$(CF_PROJECT) --commit-dirty=true
 
 seed: ## Seed the demo journey (needs a signed-up user first)
 	npx convex run seed:run
