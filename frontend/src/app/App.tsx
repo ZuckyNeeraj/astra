@@ -10,6 +10,28 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+import { useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
+
+// ── Convex helpers ───────────────────────────────────────────────────────────
+
+const ACTIVITY_KIND_COLOR: Record<string, string> = {
+  info: "#0EA5E9", success: "#16A34A", warning: "#F59E0B", action: "#8B5CF6",
+};
+
+function relativeTime(ms: number): string {
+  const diff = Date.now() - ms;
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function inr(n: number): string {
+  return `₹${n.toLocaleString("en-IN")}`;
+}
 
 type Screen =
   | "home" | "agents" | "timeline" | "hospitals"
@@ -211,14 +233,45 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
     { label: "Claim Filing",             done: false, active: false },
   ];
 
-  const activity = [
-    { text: "Hospital Agent contacted Apollo Hospitals — slot availability checked",      time: "2m ago",  color: "#0EA5E9" },
-    { text: "Insurance Agent reviewed pre-auth policy clause 4.2 — coverage confirmed",  time: "8m ago",  color: "#14B8A6" },
-    { text: "MRI report uploaded to Document Vault by Document Agent",                   time: "1h ago",  color: "#16A34A" },
-    { text: "Pre-authorization approval received from Star Health Insurance",             time: "3h ago",  color: "#8B5CF6" },
-    { text: "Planner Agent updated surgery timeline — estimated date Jul 14",            time: "5h ago",  color: "#0EA5E9" },
-    { text: "Notification Agent sent confirmation to hospital coordinator",              time: "6h ago",  color: "#F59E0B" },
-  ];
+  // ── Live data from the shared Convex DB (falls back to demo values if empty) ─
+  const journeys = useQuery(api.journeys.listActive);
+  const journey = journeys?.[0];
+  const liveActivity = useQuery(
+    api.activity.recent,
+    journey ? { journeyId: journey._id, limit: 6 } : "skip",
+  );
+
+  // Hero card values, derived from Convex when available.
+  const hero = {
+    title:    journey?.title       ?? "Father's Knee Surgery",
+    patient:  journey
+      ? `${journey.patientName} · ${journey.patientAge} yrs · ${journey.condition} · ${journey.policy}`
+      : "Rajiv Kumar · 62 yrs · Grade 3 Osteoarthritis · Star Health Comprehensive",
+    progress: journey?.progress    ?? 72,
+    stats: [
+      { label: "Stage",       value: journey?.stage ?? "Hospital Booking" },
+      { label: "Est. Surgery", value: journey?.estSurgeryDate ?? "Jul 14, 2025" },
+      { label: "Coverage",    value: journey ? `${inr(journey.coverageLeftInr)} left` : "₹4,20,000 left" },
+      { label: "Documents",   value: journey ? `${journey.documentsReady} of ${journey.documentsTotal} ready` : "5 of 7 ready" },
+    ],
+  };
+
+  // Activity feed, live from Convex (newest first) with a demo fallback.
+  const activity =
+    liveActivity && liveActivity.length > 0
+      ? liveActivity.map((a) => ({
+          text: a.message,
+          time: relativeTime(a.createdAt),
+          color: ACTIVITY_KIND_COLOR[a.kind] ?? "#0EA5E9",
+        }))
+      : [
+          { text: "Hospital Agent contacted Apollo Hospitals — slot availability checked",     time: "2m ago", color: "#0EA5E9" },
+          { text: "Insurance Agent reviewed pre-auth policy clause 4.2 — coverage confirmed", time: "8m ago", color: "#14B8A6" },
+          { text: "MRI report uploaded to Document Vault by Document Agent",                  time: "1h ago", color: "#16A34A" },
+          { text: "Pre-authorization approval received from Star Health Insurance",            time: "3h ago", color: "#8B5CF6" },
+          { text: "Planner Agent updated surgery timeline — estimated date Jul 14",           time: "5h ago", color: "#0EA5E9" },
+          { text: "Notification Agent sent confirmation to hospital coordinator",             time: "6h ago", color: "#F59E0B" },
+        ];
 
   return (
     <>
@@ -238,16 +291,11 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                 <PulseDot color="white" />
                 <span className="text-xs font-black opacity-80 tracking-widest">ACTIVE JOURNEY</span>
               </div>
-              <h2 style={{ fontFamily: "'Outfit', sans-serif" }} className="text-3xl font-black tracking-tight mb-1">Father's Knee Surgery</h2>
-              <p className="opacity-75 text-sm mb-5">Rajiv Kumar · 62 yrs · Grade 3 Osteoarthritis · Star Health Comprehensive</p>
+              <h2 style={{ fontFamily: "'Outfit', sans-serif" }} className="text-3xl font-black tracking-tight mb-1">{hero.title}</h2>
+              <p className="opacity-75 text-sm mb-5">{hero.patient}</p>
 
               <div className="flex items-center gap-4 flex-wrap">
-                {[
-                  { label: "Stage", value: "Hospital Booking" },
-                  { label: "Est. Surgery", value: "Jul 14, 2025" },
-                  { label: "Coverage", value: "₹4,20,000 left" },
-                  { label: "Documents", value: "5 of 7 ready" },
-                ].map((s) => (
+                {hero.stats.map((s) => (
                   <div key={s.label} className="bg-white/10 rounded-xl px-4 py-2.5 backdrop-blur-sm">
                     <p className="text-[10px] opacity-70 font-semibold tracking-wide">{s.label}</p>
                     <p className="font-black text-sm">{s.value}</p>
@@ -258,10 +306,10 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
 
             <div className="flex flex-col items-center ml-8 flex-shrink-0">
               <div className="relative">
-                <CircularProgress value={72} size={120} stroke={10} />
+                <CircularProgress value={hero.progress} size={120} stroke={10} />
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
-                    <span className="text-3xl font-black" style={{ fontFamily: "'DM Mono', monospace" }}>72%</span>
+                    <span className="text-3xl font-black" style={{ fontFamily: "'DM Mono', monospace" }}>{hero.progress}%</span>
                     <p className="text-xs opacity-70">complete</p>
                   </div>
                 </div>
