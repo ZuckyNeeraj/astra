@@ -1499,7 +1499,7 @@ function ScanInboxButton({ variant = "solid" }: { variant?: "solid" | "ghost" })
       if (res.status === "no_gmail") setMsg("Connect Gmail first — set the GMAIL_* env vars.");
       else if (res.status === "auth_failed") setMsg("Gmail auth failed — check the credentials.");
       else if (res.status === "unauthenticated") setMsg("Please sign in again.");
-      else if (res.status === "ok") setMsg(res.count ? `Found ${res.count} new report${res.count > 1 ? "s" : ""}.` : "No new health reports in the last 30 min.");
+      else if (res.status === "ok") setMsg(res.count ? `Found ${res.count} new report${res.count > 1 ? "s" : ""}.` : "No new health reports in the last 30 days.");
       else setMsg(res.status);
     } catch {
       setMsg("Scan failed.");

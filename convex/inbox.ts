@@ -5,7 +5,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Real Gmail ingestion. "Scan inbox" (scanInbox) and the 1-min cron (pollGmail)
-// both pull emails from the LAST 30 MINUTES whose subject is "Health Report",
+// both pull emails from the LAST 30 DAYS whose subject is "Health Report",
 // then create an email + a placeholder report + a *proposed* treatment plan.
 //
 // The treatment content is a placeholder for now ("Awaiting AI analysis") — the
@@ -44,8 +44,8 @@ async function fetchGmailReports(): Promise<
   if (!token.access_token) return { ok: false, reason: "auth_failed" };
   const authH = { Authorization: `Bearer ${token.access_token}` };
 
-  // 2. Search: subject "Health Report", received in the last 30 minutes.
-  const after = Math.floor(Date.now() / 1000) - 30 * 60;
+  // 2. Search: subject "Health Report", received in the last 30 days.
+  const after = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
   const q = encodeURIComponent(`subject:"health report" after:${after}`);
   const listRes = await fetch(
     `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=10`,
