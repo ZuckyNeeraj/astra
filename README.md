@@ -6,6 +6,49 @@
 
 ---
 
+## ⚡ Quick Start (Devs)
+
+**Prereqs:** Node 18+, a [Convex](https://convex.dev) account (free), and Python 3.10+ (only for the agents service).
+
+```bash
+git clone https://github.com/ZuckyNeeraj/astra.git
+cd astra
+
+# 1. Shared DB (Convex) — run from repo root, LEAVE IT RUNNING in its own terminal
+npm install
+npx convex dev          # first time: log in → "choose an existing project" → astra
+                        #   (very first dev only: "create a new project" → astra)
+# copies the deployment URL into .env.local automatically
+
+# 2. Frontend — new terminal
+cd frontend
+npm install
+cp .env.example .env.local     # set VITE_CONVEX_URL to the URL Convex printed above
+npm run dev                    # → http://localhost:5173
+
+# 3. Agents (Python/FastAPI) — new terminal, optional until backend work starts
+cd agents
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env           # fill in OPENAI / LINKUP / ELEVENLABS / DODO + CONVEX_URL
+uvicorn main:app --reload --port 8000   # → http://localhost:8000/docs
+```
+
+**Handy Convex commands** (run from repo root, with `convex dev` running):
+
+```bash
+npm run db:seed                      # load the demo "Father's Knee Surgery" journey
+npx convex dashboard                 # open the visual data browser (add/edit rows in a UI)
+npx convex run journeys:listActive   # query from the CLI
+```
+
+**Layout:** `frontend/` (React+Vite UI) · `convex/` (shared DB: schema + functions) · `agents/` (Hermes orchestrator).
+**Secrets rule:** only `VITE_*` values are safe in the browser — real API keys go in Convex env vars / `agents/.env`, never `VITE_`-prefixed. `.env.local` is git-ignored; commit only `*.env.example`.
+
+> New to the project or the shared-DB flow? See [**Repository & Team Setup**](#repository--team-setup) below for the full walkthrough.
+
+---
+
 ## Problem Statement
 
 Healthcare is stressful not only because people are sick, but because they suddenly become **project managers**.
