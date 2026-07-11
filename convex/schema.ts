@@ -126,6 +126,8 @@ export default defineSchema({
     userId: v.id("users"),
     emailId: v.optional(v.id("emails")),
     journeyId: v.optional(v.id("journeys")),
+    patientName: v.optional(v.string()),
+    patientAge: v.optional(v.number()),
     diagnosis: v.string(),
     condition: v.string(),
     severity: v.optional(v.string()),

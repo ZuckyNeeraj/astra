@@ -294,6 +294,10 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
               When a health report arrives or you start a journey, Astra's agents begin
               coordinating hospitals, insurance, documents and claims — and it all shows up here.
             </p>
+            <div className="mt-6">
+              <ScanInboxButton />
+            </div>
+            <p className="text-[11px] text-[#94A3B8] mt-3">Simulates a health report arriving in your inbox.</p>
           </div>
         </div>
       </>
@@ -337,6 +341,9 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
       <TopBar title={`Good morning, ${name}`} subtitle={`Here's where ${journey.patientName}'s healthcare journey stands today`} />
 
       <div className="p-8 flex flex-col gap-6">
+        <div className="flex justify-end -mb-2">
+          <ScanInboxButton variant="ghost" />
+        </div>
         {/* Hero journey card */}
         <div className="rounded-2xl p-6 text-white relative overflow-hidden" style={{ background: "linear-gradient(135deg,#0284C7 0%,#0EA5E9 40%,#14B8A6 100%)" }}>
           <div className="absolute inset-0 opacity-10">
@@ -1478,6 +1485,107 @@ function VoiceScreen() {
 
 // ── Main App ────────────────────────────────────────────────────────────────
 
+// "Scan inbox" — triggers the demo report ingestion (real Gmail polls via cron).
+function ScanInboxButton({ variant = "solid" }: { variant?: "solid" | "ghost" }) {
+  const scan = useMutation(api.inbox.simulateReport);
+  const [busy, setBusy] = useState(false);
+  const cls =
+    variant === "solid"
+      ? "bg-[#0EA5E9] text-white hover:bg-[#0284C7]"
+      : "bg-white border border-[rgba(15,23,42,0.1)] text-[#0F172A] hover:bg-[#F1F5F9]";
+  return (
+    <button
+      onClick={async () => { setBusy(true); try { await scan(); } finally { setBusy(false); } }}
+      disabled={busy}
+      className={`flex items-center gap-2 text-xs font-bold px-4 py-2.5 rounded-xl transition disabled:opacity-60 ${cls}`}
+    >
+      <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+      {busy ? "Scanning inbox…" : "Scan inbox"}
+    </button>
+  );
+}
+
+// Modal shown when a health report has produced a treatment suggestion to verify.
+function SuggestionModal() {
+  const proposed = useQuery(api.treatment.proposed);
+  const approve = useMutation(api.treatment.approve);
+  const reject = useMutation(api.treatment.reject);
+  const [busy, setBusy] = useState(false);
+
+  const entry = proposed?.[0];
+  if (!entry) return null;
+  const { plan, report, email } = entry;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(15,23,42,0.45)" }}>
+      <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden" style={{ animation: "fadeUp2 0.25s ease" }}>
+        {/* Header */}
+        <div className="p-6 text-white" style={{ background: "linear-gradient(135deg,#0284C7,#0EA5E9 45%,#14B8A6)" }}>
+          <div className="flex items-center gap-2 mb-2">
+            <PulseDot color="white" />
+            <span className="text-[11px] font-black tracking-widest opacity-90">NEW HEALTH REPORT DETECTED</span>
+          </div>
+          <h2 className="text-2xl font-black tracking-tight" style={{ fontFamily: "'Outfit', sans-serif" }}>
+            {report?.patientName ? `${report.patientName} · ` : ""}{report?.condition ?? "Report"}
+          </h2>
+          {email && <p className="text-xs opacity-80 mt-1">From {email.from} · {email.subject}</p>}
+        </div>
+
+        {/* Body */}
+        <div className="p-6 flex flex-col gap-4">
+          <div>
+            <p className="text-[11px] font-black text-[#94A3B8] tracking-widest mb-1">DIAGNOSIS</p>
+            <p className="text-sm text-[#0F172A]">{report?.diagnosis ?? plan.summary}</p>
+          </div>
+          <div className="bg-[#F0F9FF] rounded-2xl p-4 border border-[#BAE6FD]">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Bot size={15} className="text-[#0EA5E9]" />
+              <p className="text-[11px] font-black text-[#0EA5E9] tracking-widest">ASTRA RECOMMENDS</p>
+            </div>
+            <p className="font-bold text-[#0F172A]">{plan.recommendedProcedure}</p>
+            <p className="text-xs text-[#64748B] mt-1">{plan.summary}</p>
+            <div className="flex gap-4 mt-3">
+              {plan.estCostInr ? (
+                <div>
+                  <p className="text-[10px] text-[#94A3B8] font-semibold">EST. COST</p>
+                  <p className="text-sm font-black text-[#0F172A]">{inr(plan.estCostInr)}</p>
+                </div>
+              ) : null}
+              <div className="flex-1">
+                <p className="text-[10px] text-[#94A3B8] font-semibold">COVERAGE</p>
+                <p className="text-xs text-[#0F172A]">{plan.coverageNote}</p>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-[#94A3B8] leading-relaxed">
+            Approving starts an autonomous journey — Astra's agents will coordinate hospitals,
+            insurance pre-auth and documents. You stay in control and approve key decisions.
+          </p>
+
+          <div className="flex gap-3 mt-1">
+            <button
+              onClick={async () => { setBusy(true); try { await reject({ id: plan._id }); } finally { setBusy(false); } }}
+              disabled={busy}
+              className="flex-1 py-3 rounded-xl text-sm font-bold text-[#64748B] bg-[#F1F5F9] hover:bg-[#E2E8F0] transition disabled:opacity-60"
+            >
+              Dismiss
+            </button>
+            <button
+              onClick={async () => { setBusy(true); try { await approve({ id: plan._id }); } finally { setBusy(false); } }}
+              disabled={busy}
+              className="flex-[2] py-3 rounded-xl text-sm font-bold text-white transition disabled:opacity-60 flex items-center justify-center gap-2"
+              style={{ background: "linear-gradient(135deg,#0EA5E9,#14B8A6)" }}
+            >
+              <Check size={15} /> {busy ? "Starting…" : "Approve & Start Journey"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
 
@@ -1517,6 +1625,8 @@ export default function App() {
           {screen === "voice"     && <VoiceScreen />}
         </main>
       </div>
+
+      <SuggestionModal />
     </>
   );
 }
