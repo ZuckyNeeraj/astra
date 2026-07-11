@@ -170,21 +170,30 @@ function Sidebar({ screen, onNavigate }: { screen: Screen; onNavigate: (s: Scree
       </nav>
 
       {/* Journey widget */}
-      <div className="mx-3 mb-3 p-4 rounded-2xl bg-[#F8FAFF] border border-[rgba(15,23,42,0.06)]">
-        <p className="text-[10px] font-black text-[#94A3B8] tracking-widest mb-2">CURRENT JOURNEY</p>
-        <p className="font-bold text-[#0F172A] text-sm leading-tight">Father's Knee Surgery</p>
-        <p className="text-xs text-[#64748B] mb-3">Rajiv Kumar · 62 yrs</p>
-        <div className="flex items-center gap-2">
-          <div className="flex-1 h-1.5 bg-[#E2E8F0] rounded-full overflow-hidden">
-            <div className="h-full rounded-full" style={{ width: "72%", background: "linear-gradient(90deg,#0EA5E9,#14B8A6)" }} />
-          </div>
-          <span className="text-[11px] font-black text-[#0EA5E9]" style={{ fontFamily: "'DM Mono', monospace" }}>72%</span>
-        </div>
-      </div>
+      <CurrentJourneyCard />
 
       {/* User */}
       <UserCard />
     </aside>
+  );
+}
+
+function CurrentJourneyCard() {
+  const journeys = useQuery(api.journeys.listActive);
+  const j = journeys?.[0];
+  if (!j) return null;
+  return (
+    <div className="mx-3 mb-3 p-4 rounded-2xl bg-[#F8FAFF] border border-[rgba(15,23,42,0.06)]">
+      <p className="text-[10px] font-black text-[#94A3B8] tracking-widest mb-2">CURRENT JOURNEY</p>
+      <p className="font-bold text-[#0F172A] text-sm leading-tight">{j.title}</p>
+      <p className="text-xs text-[#64748B] mb-3">{j.patientName} · {j.patientAge} yrs</p>
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-1.5 bg-[#E2E8F0] rounded-full overflow-hidden">
+          <div className="h-full rounded-full" style={{ width: `${j.progress}%`, background: "linear-gradient(90deg,#0EA5E9,#14B8A6)" }} />
+        </div>
+        <span className="text-[11px] font-black text-[#0EA5E9]" style={{ fontFamily: "'DM Mono', monospace" }}>{j.progress}%</span>
+      </div>
+    </div>
   );
 }
 
@@ -239,59 +248,93 @@ function TopBar({ title, subtitle }: { title: string; subtitle?: string }) {
 
 // ── Screen 1: Home ──────────────────────────────────────────────────────────
 
-function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
-  const stages = [
-    { label: "Doctor Consultation",     done: true,  active: false },
-    { label: "Insurance Pre-Auth",       done: true,  active: false },
-    { label: "Hospital Booking",         done: false, active: true  },
-    { label: "Surgery",                  done: false, active: false },
-    { label: "Recovery & Rehab",         done: false, active: false },
-    { label: "Claim Filing",             done: false, active: false },
-  ];
+const STAGE_ORDER = [
+  "Doctor Consultation", "Insurance Pre-Auth", "Hospital Booking",
+  "Surgery", "Recovery & Rehab", "Claim Filing",
+];
+const AGENT_COLORS = ["#0EA5E9", "#8B5CF6", "#14B8A6", "#F59E0B", "#16A34A", "#64748B"];
 
-  // ── Live data from the shared Convex DB (falls back to demo values if empty) ─
+function greetingName(me: { name?: string; email?: string } | null | undefined): string {
+  const raw = me?.name || me?.email?.split("@")[0] || "";
+  if (!raw) return "there";
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+  const me = useQuery(api.users.current);
   const journeys = useQuery(api.journeys.listActive);
   const journey = journeys?.[0];
-  const liveActivity = useQuery(
-    api.activity.recent,
-    journey ? { journeyId: journey._id, limit: 6 } : "skip",
-  );
+  const bundle = useQuery(api.journeys.get, journey ? { id: journey._id } : "skip");
 
-  // Hero card values, derived from Convex when available.
+  const name = greetingName(me);
+  const loading = journeys === undefined;
+
+  // Still loading this user's journeys.
+  if (loading) {
+    return (
+      <>
+        <TopBar title={`Good morning, ${name}`} />
+        <div className="p-8 text-sm text-[#64748B]">Loading your journey…</div>
+      </>
+    );
+  }
+
+  // No journey yet for this user — clean empty state, no demo data.
+  if (!journey) {
+    return (
+      <>
+        <TopBar title={`Good morning, ${name}`} subtitle="Let's get your healthcare journey started." />
+        <div className="p-8">
+          <div className="bg-white rounded-2xl border border-[rgba(15,23,42,0.06)] p-14 flex flex-col items-center text-center">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: "linear-gradient(135deg,#0EA5E9,#14B8A6)" }}>
+              <Stethoscope size={24} className="text-white" />
+            </div>
+            <h2 className="text-xl font-black text-[#0F172A]" style={{ fontFamily: "'Outfit', sans-serif" }}>No active journey yet</h2>
+            <p className="text-sm text-[#64748B] mt-1.5 max-w-md">
+              When a health report arrives or you start a journey, Astra's agents begin
+              coordinating hospitals, insurance, documents and claims — and it all shows up here.
+            </p>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── Real, user-scoped data derived from the journey bundle ──────────────────
+  const agents = bundle?.agents ?? [];
+  const documents = bundle?.documents ?? [];
+  const approvals = bundle?.approvals ?? [];
+  const activity = (bundle?.activity ?? [])
+    .slice()
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 6)
+    .map((a) => ({
+      text: a.message,
+      time: relativeTime(a.createdAt),
+      color: ACTIVITY_KIND_COLOR[a.kind] ?? "#0EA5E9",
+    }));
+
+  const activeIdx = Math.max(0, STAGE_ORDER.indexOf(journey.stage));
+  const stages = STAGE_ORDER.map((label, i) => ({ label, done: i < activeIdx, active: i === activeIdx }));
+
+  const docsMissing = documents.filter((d) => d.status === "missing").length;
+  const approvalsPending = approvals.filter((a) => a.status === "pending").length;
+
   const hero = {
-    title:    journey?.title       ?? "Father's Knee Surgery",
-    patient:  journey
-      ? `${journey.patientName} · ${journey.patientAge} yrs · ${journey.condition} · ${journey.policy}`
-      : "Rajiv Kumar · 62 yrs · Grade 3 Osteoarthritis · Star Health Comprehensive",
-    progress: journey?.progress    ?? 72,
+    title: journey.title,
+    patient: `${journey.patientName} · ${journey.patientAge} yrs · ${journey.condition} · ${journey.policy}`,
+    progress: journey.progress,
     stats: [
-      { label: "Stage",       value: journey?.stage ?? "Hospital Booking" },
-      { label: "Est. Surgery", value: journey?.estSurgeryDate ?? "Jul 14, 2025" },
-      { label: "Coverage",    value: journey ? `${inr(journey.coverageLeftInr)} left` : "₹4,20,000 left" },
-      { label: "Documents",   value: journey ? `${journey.documentsReady} of ${journey.documentsTotal} ready` : "5 of 7 ready" },
+      { label: "Stage",       value: journey.stage },
+      { label: "Est. Surgery", value: journey.estSurgeryDate ?? "TBD" },
+      { label: "Coverage",    value: `${inr(journey.coverageLeftInr)} left` },
+      { label: "Documents",   value: `${journey.documentsReady} of ${journey.documentsTotal} ready` },
     ],
   };
 
-  // Activity feed, live from Convex (newest first) with a demo fallback.
-  const activity =
-    liveActivity && liveActivity.length > 0
-      ? liveActivity.map((a) => ({
-          text: a.message,
-          time: relativeTime(a.createdAt),
-          color: ACTIVITY_KIND_COLOR[a.kind] ?? "#0EA5E9",
-        }))
-      : [
-          { text: "Hospital Agent contacted Apollo Hospitals — slot availability checked",     time: "2m ago", color: "#0EA5E9" },
-          { text: "Insurance Agent reviewed pre-auth policy clause 4.2 — coverage confirmed", time: "8m ago", color: "#14B8A6" },
-          { text: "MRI report uploaded to Document Vault by Document Agent",                  time: "1h ago", color: "#16A34A" },
-          { text: "Pre-authorization approval received from Star Health Insurance",            time: "3h ago", color: "#8B5CF6" },
-          { text: "Planner Agent updated surgery timeline — estimated date Jul 14",           time: "5h ago", color: "#0EA5E9" },
-          { text: "Notification Agent sent confirmation to hospital coordinator",             time: "6h ago", color: "#F59E0B" },
-        ];
-
   return (
     <>
-      <TopBar title="Good morning, Rahul" subtitle="Here's where your father's healthcare journey stands today" />
+      <TopBar title={`Good morning, ${name}`} subtitle={`Here's where ${journey.patientName}'s healthcare journey stands today`} />
 
       <div className="p-8 flex flex-col gap-6">
         {/* Hero journey card */}
@@ -384,27 +427,28 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
               </button>
             </div>
             <div className="flex flex-col gap-2.5">
-              {[
-                { name: "Planner Agent",   action: "Coordinating booking timeline",        color: "#0EA5E9", status: "working" as const, pct: 68 },
-                { name: "Insurance Agent", action: "Reading policy clause 8.3",            color: "#8B5CF6", status: "working" as const, pct: 45 },
-                { name: "Hospital Agent",  action: "Finding TKR specialists nearby",       color: "#14B8A6", status: "working" as const, pct: 80 },
-                { name: "Document Agent",  action: "Waiting for MRI from Medanta",         color: "#F59E0B", status: "waiting" as const, pct: 30 },
-              ].map((a) => (
-                <div key={a.name} className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${a.color}18` }}>
-                    <Bot size={14} style={{ color: a.color }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-semibold text-[#0F172A]">{a.name}</span>
-                      <StatusBadge status={a.status} />
+              {agents.length === 0 && (
+                <p className="text-xs text-[#94A3B8] py-2">No agents running yet.</p>
+              )}
+              {agents.map((a, idx) => {
+                const color = AGENT_COLORS[idx % AGENT_COLORS.length];
+                return (
+                  <div key={a._id} className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${color}18` }}>
+                      <Bot size={14} style={{ color }} />
                     </div>
-                    <div className="h-1 bg-[#E2E8F0] rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${a.pct}%`, backgroundColor: a.color, transition: "width 1s ease" }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold text-[#0F172A]">{a.name}</span>
+                        <StatusBadge status={a.status} />
+                      </div>
+                      <div className="h-1 bg-[#E2E8F0] rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${a.progress}%`, backgroundColor: color, transition: "width 1s ease" }} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -413,10 +457,10 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
             <p className="font-bold text-[#0F172A] text-sm mb-4">Quick Access</p>
             <div className="grid grid-cols-2 gap-2.5">
               {([
-                { label: "Hospitals",  sub: "3 matched",    icon: Building2,   color: "#0EA5E9", screen: "hospitals"  as Screen },
-                { label: "Documents",  sub: "2 missing",    icon: FileText,    color: "#F59E0B", screen: "vault"      as Screen },
-                { label: "Insurance",  sub: "₹4.2L left",   icon: Shield,      color: "#14B8A6", screen: "insurance"  as Screen },
-                { label: "Approvals",  sub: "1 pending",    icon: CheckSquare, color: "#8B5CF6", screen: "approvals"  as Screen },
+                { label: "Hospitals",  sub: "Discover",                     icon: Building2,   color: "#0EA5E9", screen: "hospitals"  as Screen },
+                { label: "Documents",  sub: `${docsMissing} missing`,        icon: FileText,    color: "#F59E0B", screen: "vault"      as Screen },
+                { label: "Insurance",  sub: `${inr(journey.coverageLeftInr)} left`, icon: Shield, color: "#14B8A6", screen: "insurance"  as Screen },
+                { label: "Approvals",  sub: `${approvalsPending} pending`,   icon: CheckSquare, color: "#8B5CF6", screen: "approvals"  as Screen },
               ] as const).map((item) => (
                 <button
                   key={item.label}
@@ -446,17 +490,21 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
               <span className="text-xs font-bold text-[#16A34A]">Live</span>
             </div>
           </div>
-          <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
-            {activity.map((a, i) => (
-              <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-[#F8FAFF]">
-                <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: a.color }} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-[#0F172A] leading-snug">{a.text}</p>
-                  <p className="text-[10px] text-[#94A3B8] mt-1 font-mono">{a.time}</p>
+          {activity.length === 0 ? (
+            <p className="text-xs text-[#94A3B8] py-2">No activity yet — your agents haven't started on this journey.</p>
+          ) : (
+            <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+              {activity.map((a, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-[#F8FAFF]">
+                  <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: a.color }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-[#0F172A] leading-snug">{a.text}</p>
+                    <p className="text-[10px] text-[#94A3B8] mt-1 font-mono">{a.time}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </>
