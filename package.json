@@ -1,0 +1,15 @@
+{
+  "name": "astra",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Astra — Autonomous Healthcare Journey OS. Root workspace hosting the shared Convex backend.",
+  "type": "module",
+  "scripts": {
+    "db": "convex dev",
+    "db:deploy": "convex deploy",
+    "db:seed": "convex run seed:run"
+  },
+  "dependencies": {
+    "convex": "^1.17.0"
+  }
+}

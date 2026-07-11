@@ -533,6 +533,70 @@ Autonomous Trigger              Explicit Goal
 
 ---
 
+## Repository & Team Setup
+
+The repo is a monorepo. The **shared database is Convex** — there is no Postgres to
+host and no DB container to run. One person creates the Convex project, everyone
+else connects to the *same cloud deployment*, so all teammates read/write the same
+live data.
+
+```
+astra/
+├── frontend/     React + Vite UI            → deploys to Cloudflare Pages
+├── convex/       shared DB: schema + funcs  → the source of truth for state
+├── agents/       Python + FastAPI (Hermes orchestrator + specialist agents)
+├── .env.example  every key the project needs (copy → .env.local, fill in)
+└── package.json  root: Convex tooling only
+```
+
+### 1. Convex — the shared DB (do this first)
+
+```bash
+# From the repo root
+npm install
+npx convex dev          # first run: log in, then "create a new project" → Astra
+```
+
+- The **first teammate** creates the project; Convex prints a deployment URL and
+  writes `CONVEX_DEPLOYMENT` into `.env.local`.
+- **Everyone else**: get invited to that Convex project (Convex dashboard → project
+  → invite), then run `npx convex dev` and pick the **existing** deployment — now
+  you're all on one shared DB.
+- Load the demo data (once): `npm run db:seed`.
+- The schema lives in `convex/schema.ts` — edit it and `convex dev` hot-reloads the
+  types for everyone.
+
+### 2. Frontend
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local     # set VITE_CONVEX_URL to the Convex URL from step 1
+npm run dev                    # http://localhost:5173
+```
+
+### 3. Agents (Hermes orchestration)
+
+```bash
+cd agents
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env           # fill in OPENAI/LINKUP/ELEVENLABS/DODO + CONVEX_URL
+uvicorn main:app --reload --port 8000
+```
+
+### Secrets — where each key lives
+
+| Key | Lives in | Notes |
+| --- | --- | --- |
+| `VITE_CONVEX_URL` | `frontend/.env.local` | **Public** — safe to bundle into the browser |
+| `OPENAI`, `LINKUP`, `ELEVENLABS`, `DODO` keys | Convex dashboard env vars **and/or** `agents/.env` | **Never** prefix with `VITE_` — that would leak them to the client |
+
+> `.env`, `.env.local`, and `convex/_generated/` are git-ignored. Only `*.env.example`
+> files (no real values) are committed. Never commit a real key.
+
+---
+
 ## Setup — Getting Hermes Running
 
 Astra runs on the Hermes Agent. Do this **before** the sprint, not during it.
