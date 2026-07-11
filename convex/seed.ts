@@ -6,6 +6,16 @@ import { mutation } from "./_generated/server";
 export const run = mutation({
   args: {},
   handler: async (ctx) => {
+    // Journeys are user-scoped, so attach the demo data to the first registered
+    // user. Sign up in the app once, then run `npm run db:seed`.
+    const firstUser = await ctx.db.query("users").first();
+    if (!firstUser) {
+      throw new Error(
+        "No users yet. Sign up in the app (http://localhost:5173) first, then re-run `npm run db:seed`.",
+      );
+    }
+    const userId = firstUser._id;
+
     // Wipe existing demo data so the seed is repeatable during the sprint.
     for (const table of ["activity", "agents", "documents", "approvals", "journeys"] as const) {
       for (const row of await ctx.db.query(table).collect()) {
@@ -14,6 +24,7 @@ export const run = mutation({
     }
 
     const journeyId = await ctx.db.insert("journeys", {
+      userId,
       title: "Father's Knee Surgery",
       patientName: "Rajiv Kumar",
       patientAge: 62,

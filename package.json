@@ -10,6 +10,8 @@
     "db:seed": "convex run seed:run"
   },
   "dependencies": {
+    "@auth/core": "^0.41.1",
+    "@convex-dev/auth": "^0.0.94",
     "convex": "^1.17.0"
   }
 }

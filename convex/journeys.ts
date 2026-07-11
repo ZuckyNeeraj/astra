@@ -1,16 +1,19 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
-// Basic read/write functions to get the frontend talking to the shared DB.
-// Extend freely tomorrow — this is just enough to prove the wiring end-to-end.
+// All journey functions are scoped to the signed-in user. Unauthenticated
+// callers get empty/null results rather than another user's data.
 
-// List all active journeys (Home / journey switcher).
+// List the signed-in user's active journeys (Home / journey switcher).
 export const listActive = query({
   args: {},
   handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
     return await ctx.db
       .query("journeys")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .withIndex("by_user_status", (q) => q.eq("userId", userId).eq("status", "active"))
       .collect();
   },
 });
@@ -19,8 +22,11 @@ export const listActive = query({
 export const get = query({
   args: { id: v.id("journeys") },
   handler: async (ctx, { id }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+
     const journey = await ctx.db.get(id);
-    if (!journey) return null;
+    if (!journey || journey.userId !== userId) return null; // ownership check
 
     const [agents, activity, documents, approvals] = await Promise.all([
       ctx.db.query("agents").withIndex("by_journey", (q) => q.eq("journeyId", id)).collect(),
@@ -33,7 +39,7 @@ export const get = query({
   },
 });
 
-// Create a new journey (the "My father needs knee surgery" kickoff).
+// Create a new journey for the signed-in user (the "my father needs surgery" kickoff).
 export const create = mutation({
   args: {
     title: v.string(),
@@ -44,8 +50,12 @@ export const create = mutation({
     ownerName: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
     return await ctx.db.insert("journeys", {
       ...args,
+      userId,
       stage: "Diagnosis",
       progress: 0,
       coverageLeftInr: 0,

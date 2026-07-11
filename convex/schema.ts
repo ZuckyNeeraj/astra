@@ -1,18 +1,24 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Astra shared data model. This file IS the shared DB contract — edit it here,
-// run `npx convex dev`, and every teammate's client picks up the new types.
+// Astra shared data model.
 //
-// Modeled directly off the current frontend (see frontend/src/app/App.tsx):
-// journeys → agents → activity feed → documents → approvals → vault items.
-// Keep it small for the sprint; extend as agents start writing real output.
+// Auth: `...authTables` adds the Convex Auth tables (users, authSessions,
+// authAccounts, …). Every app row is scoped to a `userId: v.id("users")` and
+// queried through a `by_user` index so each account only sees its own data.
+//
+// Child tables (agents, activity, documents, approvals) are scoped indirectly
+// through their parent journey's `journeyId`.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default defineSchema({
+  ...authTables,
+
   // One healthcare journey a family is going through (the hero card on Home).
   journeys: defineTable({
+    userId: v.id("users"),
     title: v.string(),                 // "Father's Knee Surgery"
     patientName: v.string(),           // "Rajiv Kumar"
     patientAge: v.number(),            // 62
@@ -24,52 +30,53 @@ export default defineSchema({
     estSurgeryDate: v.optional(v.string()),
     documentsReady: v.number(),        // 5
     documentsTotal: v.number(),        // 7
-    ownerName: v.string(),             // "Rahul Sharma" (guardian using the app)
+    ownerName: v.string(),             // "Rahul Sharma" (guardian display name)
     status: v.union(v.literal("active"), v.literal("completed"), v.literal("archived")),
-  }).index("by_status", ["status"]),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_status", ["userId", "status"]),
 
   // The AI specialist agents working a journey (Planner, Insurance, Hospital, …).
   agents: defineTable({
     journeyId: v.id("journeys"),
-    name: v.string(),                  // "Insurance Agent"
-    role: v.string(),                  // short description of the function
+    name: v.string(),
+    role: v.string(),
     status: v.union(
       v.literal("working"),
       v.literal("waiting"),
       v.literal("done"),
       v.literal("pending"),
     ),
-    progress: v.number(),              // 0..100
+    progress: v.number(),
   }).index("by_journey", ["journeyId"]),
 
-  // Live activity feed — every step an agent takes (drives observability/run viewer).
+  // Live activity feed — every step an agent takes (drives observability).
   activity: defineTable({
     journeyId: v.id("journeys"),
-    agentName: v.string(),             // who did it
-    message: v.string(),               // "Hospital Agent contacted Apollo — slot checked"
+    agentName: v.string(),
+    message: v.string(),
     kind: v.union(
       v.literal("info"),
       v.literal("success"),
       v.literal("warning"),
       v.literal("action"),
     ),
-    // Optional observability metadata for the AI Activity Dashboard.
     tokens: v.optional(v.number()),
     costUsd: v.optional(v.number()),
-    createdAt: v.number(),             // Date.now() from the caller
+    createdAt: v.number(),
   }).index("by_journey", ["journeyId"]),
 
-  // Documents collected / needed for the journey (Document Vault).
+  // Documents collected / needed for the journey (Document Vault view).
   documents: defineTable({
     journeyId: v.id("journeys"),
-    name: v.string(),                  // "MRI Report"
-    type: v.string(),                  // "medical" | "insurance" | "identity" | ...
+    name: v.string(),
+    type: v.string(),
     status: v.union(
       v.literal("ready"),
       v.literal("missing"),
       v.literal("pending"),
     ),
-    storageId: v.optional(v.id("_storage")), // Convex file storage ref, when uploaded
+    storageId: v.optional(v.id("_storage")),
   }).index("by_journey", ["journeyId"]),
 
   // Things awaiting a human decision (Approval Center).
@@ -87,9 +94,77 @@ export default defineSchema({
 
   // Persistent user profile / Health Vault (memory that survives across tasks).
   vaultItems: defineTable({
-    ownerName: v.string(),
-    label: v.string(),                 // "Aadhaar" | "PAN" | "Insurance Policy" | ...
-    value: v.optional(v.string()),     // redacted / reference; files go to storage
-    storageId: v.optional(v.id("_storage")),
-  }).index("by_owner", ["ownerName"]),
+    userId: v.id("users"),
+    category: v.string(),              // "identity" | "insurance" | "medical" | "financial" | "contact" | "preference"
+    label: v.string(),                // "Aadhaar" | "Insurance Policy" | ...
+    value: v.optional(v.string()),    // redacted / reference text
+    storageId: v.optional(v.id("_storage")), // uploaded file, when present
+  }).index("by_user", ["userId"]),
+
+  // ── New pipeline tables (Gmail → report → treatment → payments) ─────────────
+
+  // Emails ingested from the user's inbox (health-report trigger).
+  emails: defineTable({
+    userId: v.id("users"),
+    gmailId: v.optional(v.string()),  // Gmail message id (dedupe)
+    from: v.string(),
+    subject: v.string(),
+    snippet: v.optional(v.string()),
+    receivedAt: v.number(),
+    attachmentStorageId: v.optional(v.id("_storage")),
+    status: v.union(
+      v.literal("new"),
+      v.literal("parsed"),
+      v.literal("ignored"),
+    ),
+  })
+    .index("by_user", ["userId"])
+    .index("by_gmailId", ["gmailId"]),
+
+  // Parsed health report extracted from an email attachment.
+  reports: defineTable({
+    userId: v.id("users"),
+    emailId: v.optional(v.id("emails")),
+    journeyId: v.optional(v.id("journeys")),
+    diagnosis: v.string(),
+    condition: v.string(),
+    severity: v.optional(v.string()),
+    summary: v.string(),
+    rawText: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]),
+
+  // AI-proposed treatment/journey plan awaiting the user's verification.
+  treatmentPlans: defineTable({
+    userId: v.id("users"),
+    reportId: v.optional(v.id("reports")),
+    journeyId: v.optional(v.id("journeys")),
+    summary: v.string(),
+    recommendedProcedure: v.string(),
+    stages: v.array(v.string()),
+    estCostInr: v.optional(v.number()),
+    coverageNote: v.optional(v.string()),
+    status: v.union(
+      v.literal("proposed"),
+      v.literal("approved"),
+      v.literal("rejected"),
+    ),
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]),
+
+  // Payments made through the product (Dodo deposits / co-pays).
+  payments: defineTable({
+    userId: v.id("users"),
+    journeyId: v.optional(v.id("journeys")),
+    purpose: v.string(),              // "deposit" | "co-pay" | "settlement"
+    amountInr: v.number(),
+    provider: v.string(),             // "dodo"
+    providerRef: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("paid"),
+      v.literal("failed"),
+    ),
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]),
 });

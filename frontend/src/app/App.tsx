@@ -4,13 +4,14 @@ import {
   Bot, FileText, CreditCard, Building2, Bell, Star, Upload, Check, X,
   AlertCircle, ArrowRight, Stethoscope, CheckCircle2, Timer, RefreshCw,
   ShieldCheck, Receipt, Circle, Eye, Download, ChevronRight, Settings,
-  User, TrendingUp, MoreHorizontal, Calendar, Activity, Menu,
+  User, TrendingUp, MoreHorizontal, Calendar, Activity, Menu, LogOut,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { useQuery } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@convex/_generated/api";
 
 // ── Convex helpers ───────────────────────────────────────────────────────────
@@ -182,19 +183,34 @@ function Sidebar({ screen, onNavigate }: { screen: Screen; onNavigate: (s: Scree
       </div>
 
       {/* User */}
-      <div className="px-4 py-4 border-t border-[rgba(15,23,42,0.06)] flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#0EA5E9] to-[#14B8A6] flex items-center justify-center flex-shrink-0">
-          <span className="text-white text-xs font-black">R</span>
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-[#0F172A] truncate">Rahul Sharma</p>
-          <p className="text-[11px] text-[#94A3B8]">Patient Guardian</p>
-        </div>
-        <button className="p-1.5 rounded-lg hover:bg-[#F1F5F9] transition">
-          <Settings size={14} className="text-[#94A3B8]" />
-        </button>
-      </div>
+      <UserCard />
     </aside>
+  );
+}
+
+function UserCard() {
+  const { signOut } = useAuthActions();
+  const me = useQuery(api.users.current);
+  const email = me?.email ?? "";
+  const initial = (email[0] ?? "U").toUpperCase();
+
+  return (
+    <div className="px-4 py-4 border-t border-[rgba(15,23,42,0.06)] flex items-center gap-3">
+      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#0EA5E9] to-[#14B8A6] flex items-center justify-center flex-shrink-0">
+        <span className="text-white text-xs font-black">{initial}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-[#0F172A] truncate">{email || "Signed in"}</p>
+        <p className="text-[11px] text-[#94A3B8]">Patient Guardian</p>
+      </div>
+      <button
+        onClick={() => void signOut()}
+        title="Sign out"
+        className="p-1.5 rounded-lg hover:bg-[#F1F5F9] transition"
+      >
+        <LogOut size={14} className="text-[#94A3B8]" />
+      </button>
+    </div>
   );
 }
 
