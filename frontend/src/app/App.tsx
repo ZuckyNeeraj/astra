@@ -10,7 +10,7 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@convex/_generated/api";
 
@@ -1485,23 +1485,46 @@ function VoiceScreen() {
 
 // ── Main App ────────────────────────────────────────────────────────────────
 
-// "Scan inbox" — triggers the demo report ingestion (real Gmail polls via cron).
+// "Scan inbox" — pulls "Health Report" emails from the last 30 minutes (Gmail).
 function ScanInboxButton({ variant = "solid" }: { variant?: "solid" | "ghost" }) {
-  const scan = useMutation(api.inbox.simulateReport);
+  const scan = useAction(api.inbox.scanInbox);
   const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function run() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await scan();
+      if (res.status === "no_gmail") setMsg("Connect Gmail first — set the GMAIL_* env vars.");
+      else if (res.status === "auth_failed") setMsg("Gmail auth failed — check the credentials.");
+      else if (res.status === "unauthenticated") setMsg("Please sign in again.");
+      else if (res.status === "ok") setMsg(res.count ? `Found ${res.count} new report${res.count > 1 ? "s" : ""}.` : "No new health reports in the last 30 min.");
+      else setMsg(res.status);
+    } catch {
+      setMsg("Scan failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const cls =
     variant === "solid"
       ? "bg-[#0EA5E9] text-white hover:bg-[#0284C7]"
       : "bg-white border border-[rgba(15,23,42,0.1)] text-[#0F172A] hover:bg-[#F1F5F9]";
+
   return (
-    <button
-      onClick={async () => { setBusy(true); try { await scan(); } finally { setBusy(false); } }}
-      disabled={busy}
-      className={`flex items-center gap-2 text-xs font-bold px-4 py-2.5 rounded-xl transition disabled:opacity-60 ${cls}`}
-    >
-      <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
-      {busy ? "Scanning inbox…" : "Scan inbox"}
-    </button>
+    <div className={`flex flex-col gap-1.5 ${variant === "ghost" ? "items-end" : "items-center"}`}>
+      <button
+        onClick={run}
+        disabled={busy}
+        className={`flex items-center gap-2 text-xs font-bold px-4 py-2.5 rounded-xl transition disabled:opacity-60 ${cls}`}
+      >
+        <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+        {busy ? "Scanning inbox…" : "Scan inbox"}
+      </button>
+      {msg && <p className="text-[11px] text-[#64748B]">{msg}</p>}
+    </div>
   );
 }
 
