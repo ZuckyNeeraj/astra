@@ -1674,11 +1674,63 @@ function VoiceScreen() {
   const notifications = [...(bundle?.notifications ?? [])].sort((a, b) => b.createdAt - a.createdAt);
   const latest = notifications[0];
 
+  const askVoice = useAction(api.voice.ask);
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [reply, setReply] = useState<{ answer: string; audioUrl: string | null } | null>(null);
+  const SUGGESTIONS = ["What's my co-pay?", "Am I covered for the surgery?", "Which hospital is recommended?", "How much coverage is left?"];
+
+  async function ask(q: string) {
+    const query = q.trim();
+    if (!query) return;
+    setAsking(true); setReply(null);
+    try { const r = await askVoice({ question: query }); setReply({ answer: r.answer, audioUrl: r.audioUrl }); }
+    finally { setAsking(false); }
+  }
+
   return (
     <>
       <TopBar />
       <div className="p-8 flex flex-col gap-6">
-        <PageIntro title="Voice Updates" subtitle="Spoken updates your Notification Agent sends the family — generated with ElevenLabs" />
+        <PageIntro title="Voice Command" subtitle="Ask about your journey — answered from your real data and spoken aloud with ElevenLabs" />
+
+        {/* Ask (ElevenLabs voice Q&A) */}
+        <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-[#0B192C] flex items-center justify-center"><Mic size={18} className="text-[#faf9f7]" /></div>
+            <div>
+              <p className="font-bold text-[#0B192C] text-sm">Ask Astra</p>
+              <p className="text-[11px] text-[#64748B]">Answered from your policy, coverage and hospitals — then spoken back</p>
+            </div>
+          </div>
+          <div className="flex gap-2 mb-3">
+            <input value={question} onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") void ask(question); }}
+              placeholder="What's my co-pay?"
+              className="flex-1 bg-white border border-[rgba(15,23,42,0.1)] rounded-xl px-4 py-3 text-sm text-[#0B192C] outline-none focus:border-[#0284C7]" />
+            <button onClick={() => void ask(question)} disabled={asking}
+              className="px-5 py-3 rounded-xl bg-[#0284C7] text-[#faf9f7] font-bold text-sm hover:bg-[#0B192C] transition disabled:opacity-60">
+              {asking ? "Thinking…" : "Ask"}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {SUGGESTIONS.map((s) => (
+              <button key={s} onClick={() => { setQuestion(s); void ask(s); }}
+                className="text-xs text-[#64748B] bg-[#F3F0EA] border border-[rgba(15,23,42,0.08)] rounded-full px-3 py-1.5 hover:border-[#0284C7] hover:text-[#0284C7] transition">
+                {s}
+              </button>
+            ))}
+          </div>
+          {reply && (
+            <div className="mt-3 bg-[#E0FBFD] rounded-xl p-4 border border-[rgba(2,132,199,0.15)]">
+              <p className="text-sm text-[#0B192C] mb-2">{reply.answer}</p>
+              {reply.audioUrl
+                ? <audio key={reply.audioUrl} autoPlay controls src={reply.audioUrl} className="w-full" />
+                : <p className="text-[11px] text-[#94A3B8]">Voice off — set ELEVENLABS_API_KEY to hear it spoken.</p>}
+            </div>
+          )}
+        </div>
+
         <div className="grid gap-8" style={{ gridTemplateColumns: "1fr 1fr" }}>
           {/* Left: latest spoken update */}
           <div className="bg-[#faf9f7] rounded-3xl border border-[rgba(15,23,42,0.06)] flex flex-col items-center justify-center py-16 px-8 text-center">
