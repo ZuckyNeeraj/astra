@@ -50,14 +50,15 @@ export const run = mutation({
 
     const now = Date.now();
     const feed = [
-      { agentName: "Hospital Agent", message: "Contacted Apollo Hospitals — slot availability checked", kind: "info" as const, ago: 2 * 60_000 },
-      { agentName: "Insurance Agent", message: "Reviewed pre-auth policy clause 4.2 — coverage confirmed", kind: "success" as const, ago: 8 * 60_000 },
-      { agentName: "Document Agent", message: "MRI report uploaded to Document Vault", kind: "action" as const, ago: 60 * 60_000 },
-      { agentName: "Insurance Agent", message: "Pre-authorization approval received from Star Health Insurance", kind: "success" as const, ago: 3 * 60 * 60_000 },
+      { agentName: "Hospital Agent", message: "Contacted Apollo Hospitals — slot availability checked", kind: "info" as const, ago: 2 * 60_000, tokens: 1240, costUsd: 0.0041 },
+      { agentName: "Insurance Agent", message: "Reviewed pre-auth policy clause 4.2 — coverage confirmed", kind: "success" as const, ago: 8 * 60_000, tokens: 2180, costUsd: 0.0072 },
+      { agentName: "Document Agent", message: "MRI report uploaded to Document Vault", kind: "action" as const, ago: 60 * 60_000, tokens: 640, costUsd: 0.0021 },
+      { agentName: "Insurance Agent", message: "Pre-authorization approval received from Star Health Insurance", kind: "success" as const, ago: 3 * 60 * 60_000, tokens: 1875, costUsd: 0.0062 },
     ];
     for (const f of feed) {
       await ctx.db.insert("activity", {
-        journeyId, agentName: f.agentName, message: f.message, kind: f.kind, createdAt: now - f.ago,
+        journeyId, agentName: f.agentName, message: f.message, kind: f.kind,
+        tokens: f.tokens, costUsd: f.costUsd, createdAt: now - f.ago,
       });
     }
 

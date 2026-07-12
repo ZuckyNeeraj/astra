@@ -522,37 +522,74 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
 // ── Screen 2: Agents ────────────────────────────────────────────────────────
 
 function AgentsScreen() {
-  const agents = [
-    { name: "Planner Agent",       role: "Journey Orchestrator",      status: "working" as const, action: "Coordinating hospital booking timeline and surgery prep schedule",        progress: 68,  tasks: 12, color: "#0EA5E9" },
-    { name: "Insurance Agent",     role: "Coverage Specialist",       status: "working" as const, action: "Parsing Star Health policy clause 8.3 — surgical procedure coverage",   progress: 45,  tasks: 7,  color: "#8B5CF6" },
-    { name: "Hospital Agent",      role: "Facility Coordinator",      status: "working" as const, action: "Matching TKR-specialist hospitals within 10 km — 3 shortlisted",        progress: 80,  tasks: 9,  color: "#14B8A6" },
-    { name: "Document Agent",      role: "Records Manager",           status: "waiting" as const, action: "Awaiting MRI report from Medanta Radiology — follow-up sent",           progress: 30,  tasks: 5,  color: "#F59E0B" },
-    { name: "Claim Agent",         role: "Reimbursement Specialist",  status: "pending" as const, action: "On standby — claim package preparation begins post-surgery discharge",  progress: 10,  tasks: 3,  color: "#64748B" },
-    { name: "Notification Agent",  role: "Communication Manager",     status: "done"    as const, action: "Pre-auth approval confirmation sent to Apollo hospital coordinator",    progress: 100, tasks: 15, color: "#16A34A" },
-  ];
+  const journey = useQuery(api.journeys.listActive)?.[0];
+  const bundle = useQuery(api.journeys.get, journey ? { id: journey._id } : "skip");
 
-  const events = [
-    { agent: "Hospital Agent",   text: "Found 3 hospitals matching TKR specialty + Star Health coverage",   time: "Just now",  color: "#14B8A6" },
-    { agent: "Insurance Agent",  text: "Clause 8.3 confirmed: TKR procedure covered up to ₹5,00,000",     time: "4m ago",    color: "#8B5CF6" },
-    { agent: "Planner Agent",    text: "Surgery timeline updated — estimated date moved to Jul 14",        time: "11m ago",   color: "#0EA5E9" },
-    { agent: "Document Agent",   text: "Follow-up reminder sent to Medanta radiology department",         time: "22m ago",   color: "#F59E0B" },
-    { agent: "Notification Agent","text": "Confirmation email dispatched to hospital coordinator",         time: "1h ago",    color: "#16A34A" },
-    { agent: "Planner Agent",    text: "Pre-op checklist generated — 8 items identified",                time: "2h ago",    color: "#0EA5E9" },
-    { agent: "Insurance Agent",  text: "Policy deductible ₹10,000 per procedure confirmed",              time: "3h ago",    color: "#8B5CF6" },
-    { agent: "Hospital Agent",   text: "Apollo Hospitals Bandra identified as primary recommendation",    time: "4h ago",    color: "#14B8A6" },
-  ];
+  const agentRows = bundle?.agents ?? [];
+  const activityRows = (bundle?.activity ?? []).slice().sort((a, b) => b.createdAt - a.createdAt);
+
+  // Empty state — no journey started yet.
+  if (!journey) {
+    return (
+      <>
+        <TopBar title="Live Agent Activity" subtitle="Autonomous agents managing your healthcare journey" />
+        <div className="p-8">
+          <div className="bg-white rounded-2xl p-12 border border-[rgba(15,23,42,0.06)] text-center">
+            <div className="w-14 h-14 rounded-2xl bg-[#EFF6FF] flex items-center justify-center mx-auto mb-4">
+              <Zap size={22} className="text-[#0EA5E9]" />
+            </div>
+            <p className="font-bold text-[#0F172A]">No active journey yet</p>
+            <p className="text-sm text-[#64748B] mt-1">Approve a health report on Home to deploy your agent team — their live steps, tokens and cost show up here.</p>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Per-agent: latest action message + step count, coloured by position.
+  const agents = agentRows.map((a, idx) => {
+    const mine = activityRows.filter((ev) => ev.agentName === a.name);
+    return {
+      name: a.name,
+      role: a.role,
+      status: a.status,
+      progress: a.progress,
+      color: AGENT_COLORS[idx % AGENT_COLORS.length],
+      action: mine[0]?.message ?? "Standing by…",
+      tasks: mine.length,
+    };
+  });
+
+  // Live event stream from real activity rows.
+  const events = activityRows.map((e) => {
+    const i = agentRows.findIndex((a) => a.name === e.agentName);
+    return {
+      agent: e.agentName,
+      text: e.message,
+      time: relativeTime(e.createdAt),
+      color: i >= 0 ? AGENT_COLORS[i % AGENT_COLORS.length] : (ACTIVITY_KIND_COLOR[e.kind] ?? "#0EA5E9"),
+      tokens: e.tokens,
+      costUsd: e.costUsd,
+    };
+  });
+
+  // Rolled-up observability stats.
+  const agentsActive = agentRows.filter((a) => a.status === "working").length;
+  const tokensUsed = activityRows.reduce((s, e) => s + (e.tokens ?? 0), 0);
+  const costUsd = activityRows.reduce((s, e) => s + (e.costUsd ?? 0), 0);
+  const fmtCost = (n: number) => (n >= 0.01 || n === 0 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`);
 
   return (
     <>
-      <TopBar title="Live Agent Activity" subtitle="6 autonomous agents managing your father's healthcare journey" />
+      <TopBar title="Live Agent Activity" subtitle={`${agentRows.length} agents · ${journey.title}`} />
       <div className="p-8 flex flex-col gap-6">
         {/* Summary row */}
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
           {[
-            { label: "Agents Active",   value: "4",   color: "#0EA5E9", bg: "#EFF6FF"  },
-            { label: "Tasks Completed", value: "38",  color: "#16A34A", bg: "#F0FDF4"  },
-            { label: "Agents Waiting",  value: "1",   color: "#D97706", bg: "#FFFBEB"  },
-            { label: "Total Tasks",     value: "51",  color: "#64748B", bg: "#F8FAFF"  },
+            { label: "Agents Active", value: String(agentsActive),               color: "#0EA5E9", bg: "#EFF6FF"  },
+            { label: "Steps Logged",  value: String(activityRows.length),         color: "#16A34A", bg: "#F0FDF4"  },
+            { label: "Tokens Used",   value: tokensUsed.toLocaleString("en-US"),  color: "#8B5CF6", bg: "#F5F3FF"  },
+            { label: "Est. Cost",     value: fmtCost(costUsd),                    color: "#64748B", bg: "#F8FAFF"  },
           ].map((s) => (
             <div key={s.label} className="bg-white rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
               <p className="text-xs text-[#64748B] mb-1">{s.label}</p>
@@ -587,7 +624,7 @@ function AgentsScreen() {
                   <div className="flex-1 h-1.5 bg-[#E2E8F0] rounded-full overflow-hidden">
                     <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${agent.progress}%`, backgroundColor: agent.color }} />
                   </div>
-                  <span className="text-[11px] font-bold text-[#94A3B8]" style={{ fontFamily: "'DM Mono', monospace" }}>{agent.tasks} tasks</span>
+                  <span className="text-[11px] font-bold text-[#94A3B8]" style={{ fontFamily: "'DM Mono', monospace" }}>{agent.tasks} steps</span>
                 </div>
               </div>
             ))}
@@ -607,13 +644,20 @@ function AgentsScreen() {
             </div>
 
             <div className="flex flex-col gap-3 overflow-y-auto flex-1">
+              {events.length === 0 && (
+                <p className="text-xs text-[#94A3B8]">No steps yet — agents haven't started on this journey.</p>
+              )}
               {events.map((e, i) => (
                 <div key={i} className="flex items-start gap-3 border-b border-[rgba(15,23,42,0.04)] pb-3 last:border-0 last:pb-0">
                   <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: e.color }} />
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-bold mb-0.5" style={{ color: e.color }}>{e.agent}</p>
                     <p className="text-xs text-[#0F172A] leading-snug">{e.text}</p>
-                    <p className="text-[10px] text-[#94A3B8] mt-0.5 font-mono">{e.time}</p>
+                    <p className="text-[10px] text-[#94A3B8] mt-0.5 font-mono">
+                      {e.time}
+                      {typeof e.tokens === "number" ? ` · ${e.tokens.toLocaleString("en-US")} tok` : ""}
+                      {typeof e.costUsd === "number" ? ` · ${fmtCost(e.costUsd)}` : ""}
+                    </p>
                   </div>
                 </div>
               ))}
