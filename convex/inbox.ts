@@ -158,13 +158,26 @@ export const resetDemoData = mutation({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
-    let removed = { emails: 0, reports: 0, plans: 0 };
-    const emails = await ctx.db.query("emails").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
-    for (const e of emails) { await ctx.db.delete(e._id); removed.emails++; }
-    const reports = await ctx.db.query("reports").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
-    for (const r of reports) { if (!r.journeyId) { await ctx.db.delete(r._id); removed.reports++; } }
-    const plans = await ctx.db.query("treatmentPlans").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
-    for (const p of plans) { if (p.status !== "approved") { await ctx.db.delete(p._id); removed.plans++; } }
+    const removed = { journeys: 0, emails: 0, reports: 0, plans: 0 };
+
+    // Clear the user's journeys + every child row (agents/activity/docs/approvals/
+    // hospitals/claims/notifications) so the dashboard starts on a clean slate.
+    const journeys = await ctx.db.query("journeys").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
+    for (const j of journeys) {
+      for (const table of ["agents", "activity", "documents", "approvals", "hospitals", "claims", "notifications"] as const) {
+        for (const row of await ctx.db.query(table).withIndex("by_journey", (q) => q.eq("journeyId", j._id)).collect()) {
+          await ctx.db.delete(row._id);
+        }
+      }
+      await ctx.db.delete(j._id);
+      removed.journeys++;
+    }
+
+    // Clear the ingestion pipeline entirely (emails, reports, all plans). Keeps
+    // the vault (uploaded docs) so a fresh Scan re-surfaces the popup.
+    for (const e of await ctx.db.query("emails").withIndex("by_user", (q) => q.eq("userId", userId)).collect()) { await ctx.db.delete(e._id); removed.emails++; }
+    for (const r of await ctx.db.query("reports").withIndex("by_user", (q) => q.eq("userId", userId)).collect()) { await ctx.db.delete(r._id); removed.reports++; }
+    for (const p of await ctx.db.query("treatmentPlans").withIndex("by_user", (q) => q.eq("userId", userId)).collect()) { await ctx.db.delete(p._id); removed.plans++; }
     return removed;
   },
 });

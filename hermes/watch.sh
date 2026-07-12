@@ -2,35 +2,42 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Astra — autonomous Hermes orchestration loop.
 #
-# Polls Convex for newly-ingested health reports (proposed treatment plans) and
-# lets the Hermes Orchestrator turn each into a running care journey — calling
-# the Convex agent tools via the Convex MCP server and writing live activity the
-# dashboard shows in real time.
+# Keep this running in a terminal and everything after "Approve" is automatic:
+# when a journey needs work — a new proposed plan OR a journey you approved in the
+# UI whose specialists haven't run — it launches the Hermes agent team, which
+# writes live activity + approvals the dashboard shows in real time.
 #
 # Run on your machine (Hermes runs locally):
 #   bash hermes/watch.sh
 #
-# Requires: hermes installed + configured (provider openai-api, Convex MCP
-# registered), and `npx convex` working from this repo.
-#
-# NOTE: this runs Hermes with --yolo so it can call the Convex tools unattended.
-# That auto-approves tool calls — it's your machine and your call. Ctrl-C stops.
+# Requires: hermes installed + configured (provider openai-api, Convex MCP), and
+# `npx convex` working from this repo. Ctrl-C stops. INTERVAL overrides the poll.
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-PROMPT="$(cat hermes/orchestrator.md)"
-INTERVAL="${INTERVAL:-20}"
+INTERVAL="${INTERVAL:-15}"
+SEEN_FILE="$(mktemp)"
+trap 'rm -f "$SEEN_FILE"' EXIT
 
-echo "Astra watch loop — polling Convex every ${INTERVAL}s. Ctrl-C to stop."
+echo "Astra watch loop — auto-runs the agent team when a journey needs work. Polling every ${INTERVAL}s. Ctrl-C to stop."
 while true; do
-  PENDING="$(npx convex run agentTools:orchestration_pending '{}' 2>/dev/null || echo '[]')"
-  COUNT="$(printf '%s' "$PENDING" | grep -c 'planId' || true)"
-  if [ "${COUNT:-0}" -gt 0 ]; then
-    echo "[$(date +%H:%M:%S)] ${COUNT} pending report(s) → invoking Hermes Orchestrator…"
-    hermes --yolo -z "$PROMPT" || echo "  (hermes run errored — will retry next cycle)"
+  TARGET="$(npx convex run agentTools:orchestrationTarget '{}' 2>/dev/null || echo '{}')"
+  MODE="$(printf '%s' "$TARGET" | grep -o '"mode": *"[^"]*"' | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"
+
+  if [ "${MODE:-none}" = "start" ] || [ "${MODE:-none}" = "continue" ]; then
+    JID="$(printf '%s' "$TARGET"    | grep -o '"journeyId": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+    PLANID="$(printf '%s' "$TARGET" | grep -o '"planId": *"[^"]*"'    | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+    KEY="${JID:-$PLANID}"
+    if [ -n "$KEY" ] && grep -qF "$KEY" "$SEEN_FILE" 2>/dev/null; then
+      echo "[$(date +%H:%M:%S)] $KEY already run this session — skipping (restart watch to retry)."
+    else
+      echo "[$(date +%H:%M:%S)] work detected (mode=$MODE) → running the agent team…"
+      bash hermes/run-journey.sh
+      [ -n "$KEY" ] && printf '%s\n' "$KEY" >> "$SEEN_FILE"
+    fi
   else
-    echo "[$(date +%H:%M:%S)] nothing pending"
+    echo "[$(date +%H:%M:%S)] nothing to orchestrate"
   fi
   sleep "$INTERVAL"
 done

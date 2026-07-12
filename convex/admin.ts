@@ -31,7 +31,7 @@ export const clearJourneys = internalMutation({
   args: {},
   handler: async (ctx) => {
     const counts: Record<string, number> = {};
-    for (const table of ["activity", "agents", "documents", "approvals", "journeys"] as const) {
+    for (const table of ["activity", "agents", "documents", "approvals", "hospitals", "claims", "notifications", "journeys"] as const) {
       let n = 0;
       for (const row of await ctx.db.query(table).collect()) {
         await ctx.db.delete(row._id);
