@@ -1,4 +1,5 @@
-import { action, mutation, query } from "./_generated/server";
+import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { Doc, Id } from "./_generated/dataModel";
 
@@ -68,6 +69,17 @@ export const startJourneyFromPlan = mutation({
       .collect();
     const documentsReady = REQUIRED_LABELS.filter((l) => vault.some((vi) => vi.label === l)).length;
 
+    // Seed coverage + policy from the REAL parsed insurance document, when present
+    // (the Health Vault agent extracts sumInsuredInr / insurer). No fake defaults —
+    // 0 / "Pending policy read" until a policy has actually been read.
+    const policyDoc = vault.find((vi) => vi.docKind === "insurance_policy");
+    const sumInsured = Number(policyDoc?.extractedFields?.sumInsuredInr ?? "");
+    const coverageLeftInr = isFinite(sumInsured) && sumInsured > 0 ? sumInsured : 0;
+    const policyLabel = policyDoc?.extractedFields?.insurer
+      ? `${policyDoc.extractedFields.insurer}${policyDoc.extractedFields.policyNumber ? ` · ${policyDoc.extractedFields.policyNumber}` : ""}`
+      : "Pending policy read";
+
+    const stages = (plan.stages && plan.stages.length ? plan.stages : SEED_STAGES);
     const patientName = report?.patientName ?? "Patient";
     const journeyId = await ctx.db.insert("journeys", {
       userId,
@@ -75,10 +87,10 @@ export const startJourneyFromPlan = mutation({
       patientName,
       patientAge: report?.patientAge ?? 0,
       condition: report?.condition ?? "See report",
-      policy: "As per uploaded policy",
-      stage: SEED_STAGES[0],
+      policy: policyLabel,
+      stage: stages[0],
       progress: 5,
-      coverageLeftInr: 500000,
+      coverageLeftInr,
       documentsReady,
       documentsTotal: REQUIRED_LABELS.length,
       ownerName: "You",
@@ -91,6 +103,7 @@ export const startJourneyFromPlan = mutation({
       { name: "Insurance Agent",    role: "Coverage Specialist",  status: "pending" as const, progress: 0 },
       { name: "Hospital Agent",     role: "Facility Coordinator", status: "pending" as const, progress: 0 },
       { name: "Document Agent",     role: "Records Manager",      status: "pending" as const, progress: 0 },
+      { name: "Claim Agent",        role: "Claims Filer",         status: "pending" as const, progress: 0 },
     ];
     for (const a of agents) await ctx.db.insert("agents", { journeyId, ...a });
 
@@ -253,6 +266,171 @@ export const readVaultDocuments = query({
         text: i.extractedText ?? null,
       })),
     };
+  },
+});
+
+// ── getUserLocation — the journey owner's current city (for hospital search) ──
+export const getUserLocation = query({
+  args: { journeyId: v.id("journeys") },
+  handler: async (ctx, { journeyId }) => {
+    const journey = await ctx.db.get(journeyId);
+    if (!journey) return { city: null, region: null, country: null };
+    const profile = await ctx.db
+      .query("profiles")
+      .withIndex("by_user", (q) => q.eq("userId", journey.userId))
+      .unique();
+    return {
+      city: profile?.city ?? null,
+      region: profile?.region ?? null,
+      country: profile?.country ?? null,
+      lat: profile?.lat ?? null,
+      lng: profile?.lng ?? null,
+    };
+  },
+});
+
+// ── addHospitalOption — record ONE real hospital the Hospital Agent found ──────
+// Upserts by (journeyId, name) so re-running the agent doesn't duplicate rows.
+export const addHospitalOption = mutation({
+  args: {
+    journeyId: v.id("journeys"),
+    name: v.string(),
+    area: v.optional(v.string()),
+    estCostInr: v.optional(v.number()),
+    coverageNote: v.optional(v.string()),
+    rating: v.optional(v.number()),
+    distanceKm: v.optional(v.number()),
+    why: v.optional(v.string()),
+    source: v.optional(v.string()),
+    recommended: v.optional(v.boolean()),
+  },
+  handler: async (ctx, a) => {
+    const existing = await ctx.db
+      .query("hospitals")
+      .withIndex("by_journey", (q) => q.eq("journeyId", a.journeyId))
+      .collect();
+    const match = existing.find((h) => h.name.toLowerCase() === a.name.toLowerCase());
+    const { journeyId, name, ...rest } = a;
+    if (match) {
+      await ctx.db.patch(match._id, rest);
+      return match._id;
+    }
+    return await ctx.db.insert("hospitals", { journeyId, name, ...rest, createdAt: Date.now() });
+  },
+});
+
+// ── fileClaim — the Claim Agent's action: real email + mocked employer portal ─
+// Hermes composes the claim; this deterministically SENDS it. Emails via Resend
+// when RESEND_API_KEY is set (falls back to recording the claim if not), always
+// records a mocked employer/TPA portal submission, and writes a claims row + a
+// live activity step. Recipient defaults to the journey owner's email so there's
+// always a real, showable claim confirmation.
+export const getJourneyOwner = internalQuery({
+  args: { journeyId: v.id("journeys") },
+  handler: async (ctx, { journeyId }) => {
+    const journey = await ctx.db.get(journeyId);
+    if (!journey) return null;
+    const user = await ctx.db.get(journey.userId);
+    return { email: (user as any)?.email ?? null, name: (user as any)?.name ?? null };
+  },
+});
+
+export const recordClaim = internalMutation({
+  args: {
+    journeyId: v.id("journeys"),
+    hospitalName: v.optional(v.string()),
+    amountInr: v.optional(v.number()),
+    insurer: v.optional(v.string()),
+    policyNumber: v.optional(v.string()),
+    toEmail: v.optional(v.string()),
+    emailStatus: v.union(v.literal("sent"), v.literal("recorded"), v.literal("failed")),
+    emailRef: v.optional(v.string()),
+    employerPortalRef: v.optional(v.string()),
+    summary: v.optional(v.string()),
+  },
+  handler: async (ctx, a) => {
+    return await ctx.db.insert("claims", { ...a, createdAt: Date.now() });
+  },
+});
+
+export const fileClaim = action({
+  args: {
+    journeyId: v.id("journeys"),
+    hospitalName: v.optional(v.string()),
+    amountInr: v.optional(v.number()),
+    insurer: v.optional(v.string()),
+    policyNumber: v.optional(v.string()),
+    toEmail: v.optional(v.string()),
+    summary: v.string(),          // Hermes-composed one-paragraph claim summary
+  },
+  handler: async (
+    ctx,
+    a,
+  ): Promise<{ ok: boolean; emailStatus: string; employerPortalRef: string; reason?: string }> => {
+    const owner: { email: string | null; name: string | null } | null = await ctx.runQuery(
+      internal.agentTools.getJourneyOwner,
+      { journeyId: a.journeyId },
+    );
+    const to = a.toEmail || owner?.email || null;
+
+    // Mocked employer/TPA portal submission — always succeeds, deterministic ref.
+    const employerPortalRef = `EMP-${a.journeyId.slice(-6).toUpperCase()}-${a.amountInr ?? 0}`;
+
+    const subject = `Insurance claim — ${a.hospitalName ?? "hospital"} (${a.insurer ?? "insurer"})`;
+    const body =
+      `<h2>Astra — Insurance Claim Filed</h2>` +
+      `<p>${a.summary}</p>` +
+      `<ul>` +
+      (a.hospitalName ? `<li><b>Hospital:</b> ${a.hospitalName}</li>` : "") +
+      (a.amountInr != null ? `<li><b>Claim amount:</b> ₹${a.amountInr.toLocaleString("en-IN")}</li>` : "") +
+      (a.insurer ? `<li><b>Insurer:</b> ${a.insurer}</li>` : "") +
+      (a.policyNumber ? `<li><b>Policy no.:</b> ${a.policyNumber}</li>` : "") +
+      `<li><b>Employer portal ref:</b> ${employerPortalRef}</li>` +
+      `</ul>`;
+
+    let emailStatus: "sent" | "recorded" | "failed" = "recorded";
+    let emailRef: string | undefined;
+    let reason: string | undefined;
+
+    const key = process.env.RESEND_API_KEY;
+    if (key && to) {
+      try {
+        const from = process.env.RESEND_FROM || "Astra <onboarding@resend.dev>";
+        const res = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+          body: JSON.stringify({ from, to, subject, html: body }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          emailStatus = "sent";
+          emailRef = json.id;
+        } else {
+          emailStatus = "failed";
+          reason = `resend_${res.status}: ${(await res.text()).slice(0, 160)}`;
+        }
+      } catch (err) {
+        emailStatus = "failed";
+        reason = err instanceof Error ? err.message : "resend_error";
+      }
+    } else {
+      reason = !key ? "no_resend_key" : "no_recipient";
+    }
+
+    await ctx.runMutation(internal.agentTools.recordClaim, {
+      journeyId: a.journeyId,
+      hospitalName: a.hospitalName,
+      amountInr: a.amountInr,
+      insurer: a.insurer,
+      policyNumber: a.policyNumber,
+      toEmail: to ?? undefined,
+      emailStatus,
+      emailRef,
+      employerPortalRef,
+      summary: a.summary,
+    });
+
+    return { ok: emailStatus !== "failed", emailStatus, employerPortalRef, reason };
   },
 });
 

@@ -92,6 +92,34 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_journey", ["journeyId"]),
 
+  // The signed-in user's current location (captured from the browser, reverse-
+  // geocoded to a city). Drives location-aware hospital search. One row per user.
+  profiles: defineTable({
+    userId: v.id("users"),
+    city: v.optional(v.string()),      // "Pune"
+    region: v.optional(v.string()),    // "Maharashtra"
+    country: v.optional(v.string()),   // "India"
+    lat: v.optional(v.number()),
+    lng: v.optional(v.number()),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
+
+  // Real hospital options a Hospital Agent found (via Linkup) for one journey.
+  // Written by the agent, read by the Hospitals screen — nothing hardcoded.
+  hospitals: defineTable({
+    journeyId: v.id("journeys"),
+    name: v.string(),
+    area: v.optional(v.string()),          // neighbourhood / locality
+    estCostInr: v.optional(v.number()),
+    coverageNote: v.optional(v.string()),
+    rating: v.optional(v.number()),
+    distanceKm: v.optional(v.number()),
+    why: v.optional(v.string()),           // one line: why this hospital
+    source: v.optional(v.string()),        // sourced URL from Linkup
+    recommended: v.optional(v.boolean()),
+    createdAt: v.number(),
+  }).index("by_journey", ["journeyId"]),
+
   // Persistent user profile / Health Vault (memory that survives across tasks).
   vaultItems: defineTable({
     userId: v.id("users"),
@@ -163,6 +191,39 @@ export default defineSchema({
     ),
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
+
+  // Notifications the Notification Agent sends the family (spoken via ElevenLabs
+  // and/or email). The audio is stored in Convex file storage and played in-app.
+  notifications: defineTable({
+    journeyId: v.id("journeys"),
+    text: v.string(),
+    voiceStatus: v.union(       // ElevenLabs TTS leg
+      v.literal("spoken"),      // audio generated + stored
+      v.literal("text_only"),   // no voice provider configured
+      v.literal("failed"),
+    ),
+    audioStorageId: v.optional(v.id("_storage")),
+    createdAt: v.number(),
+  }).index("by_journey", ["journeyId"]),
+
+  // Insurance claims the Claim Agent files (real email + mocked employer portal).
+  claims: defineTable({
+    journeyId: v.id("journeys"),
+    hospitalName: v.optional(v.string()),
+    amountInr: v.optional(v.number()),
+    insurer: v.optional(v.string()),
+    policyNumber: v.optional(v.string()),
+    toEmail: v.optional(v.string()),
+    emailStatus: v.union(     // real email leg
+      v.literal("sent"),
+      v.literal("recorded"),  // no email provider configured → drafted/recorded only
+      v.literal("failed"),
+    ),
+    emailRef: v.optional(v.string()),        // provider message id
+    employerPortalRef: v.optional(v.string()), // mocked employer/TPA submission ref
+    summary: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_journey", ["journeyId"]),
 
   // Payments made through the product (Dodo deposits / co-pays).
   payments: defineTable({

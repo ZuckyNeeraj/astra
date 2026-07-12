@@ -57,13 +57,18 @@ Do: (1) run agentTools:setAgent {journeyId:'$JID', name:'Health Vault Agent', st
 (4) if a policy was read, run agentTools:patchJourney {journeyId:'$JID', coverageLeftInr:<the real sumInsuredInr you read, as a number>};
 (5) run agentTools:setAgent {journeyId:'$JID', name:'Health Vault Agent', status:'done', progress:100}."
 
-echo "▶ Hospital Agent (Linkup)…"
+# Resolve the patient's REAL current city from their saved location (deterministic;
+# no hardcoded city). Falls back to India-wide search if they haven't shared one.
+LOC="$(npx convex run agentTools:getUserLocation "{\"journeyId\":\"$JID\"}" 2>/dev/null)"
+CITY="$(printf '%s' "$LOC" | grep -o '"city": *"[^"]*"' | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"
+CITYLBL="${CITY:-India (no location shared)}"
+echo "▶ Hospital Agent (Linkup) — searching near: $CITYLBL"
 runagent "$HDR
-You are the Hospital Agent for journeyId $JID. Procedure: $PROC, city Mumbai.
+You are the Hospital Agent for journeyId $JID. Procedure: $PROC. The patient's current city is: ${CITY:-unknown (search India-wide)}.
 Do: (1) run agentTools:setAgent {journeyId:'$JID', name:'Hospital Agent', status:'working', progress:40};
-(2) run agentTools:linkupHospitalSearch {procedure:'$PROC', city:'Mumbai'};
-(3) from the result pick the 3 best hospitals with approx cost, and for EACH run agentTools:logStep {journeyId:'$JID', agentName:'Hospital Agent', message:'<hospital name — ₹cost>', kind:'info', tokens:<~600>, costUsd:<~0.003>};
-(4) run agentTools:addApproval {journeyId:'$JID', title:'Choose a hospital', detail:'<the 3 options>'};
+(2) run agentTools:linkupHospitalSearch {procedure:'$PROC'$( [ -n "$CITY" ] && printf ", city:'%s'" "$CITY")};
+(3) from the result pick the 3 best hospitals. For EACH, run agentTools:addHospitalOption {journeyId:'$JID', name:'<hospital>', area:'<locality>', estCostInr:<number>, coverageNote:'<one line>', why:'<why this one>', source:'<a source url from the result>', recommended:<true for the single best, else false>};
+(4) run agentTools:logStep {journeyId:'$JID', agentName:'Hospital Agent', message:'Found 3 hospitals near ${CITY:-the patient} for $PROC', kind:'success', tokens:<~700>, costUsd:<~0.0035>};
 (5) run agentTools:setAgent {journeyId:'$JID', name:'Hospital Agent', status:'done', progress:100}."
 
 echo "▶ Insurance Agent…"
@@ -86,12 +91,21 @@ Do: (1) run agentTools:setAgent {journeyId:'$JID', name:'Document Agent', status
 (5) if any docs are missing, run agentTools:addApproval {journeyId:'$JID', title:'Upload missing documents', detail:'<missing list>'};
 (6) run agentTools:setAgent {journeyId:'$JID', name:'Document Agent', status:'done', progress:100}."
 
-echo "▶ Notification Agent…"
+echo "▶ Claim Agent…"
 runagent "$HDR
-You are the Notification Agent for journeyId $JID (patient $PATIENT).
+You are the Claim Agent for journeyId $JID (patient $PATIENT, $PROC, estimated ₹${COST:-250000}). You file the insurance claim.
+Do: (1) run agentTools:setAgent {journeyId:'$JID', name:'Claim Agent', status:'working', progress:60};
+(2) run agentTools:fileClaim {journeyId:'$JID', hospitalName:'<the recommended hospital if known, else the top hospital>', amountInr:<the claim amount, use ${COST:-250000}>, summary:'<one paragraph: patient, procedure, hospital, amount, that the claim is being filed with the insurer and via the employer portal>'} — this really emails the claim and submits to the employer portal;
+(3) from the result, run agentTools:logStep {journeyId:'$JID', agentName:'Claim Agent', message:'Claim filed — email <emailStatus>, employer portal ref <employerPortalRef>', kind:'success', tokens:<~450>, costUsd:<~0.0022>};
+(4) run agentTools:setAgent {journeyId:'$JID', name:'Claim Agent', status:'done', progress:100}."
+
+echo "▶ Notification Agent (ElevenLabs voice)…"
+runagent "$HDR
+You are the Notification Agent for journeyId $JID (patient $PATIENT, $PROC). You give the family a spoken update.
 Do: (1) run agentTools:setAgent {journeyId:'$JID', name:'Notification Agent', status:'working', progress:80};
-(2) run agentTools:logStep {journeyId:'$JID', agentName:'Notification Agent', message:'Family notified: <one-line journey summary>', kind:'action', tokens:<~150>, costUsd:<~0.0008>};
-(3) run agentTools:patchJourney {journeyId:'$JID', progress:45};
-(4) run agentTools:setAgent {journeyId:'$JID', name:'Notification Agent', status:'done', progress:100}."
+(2) run notify:notifyFamily {journeyId:'$JID', message:'<a warm 2-3 sentence spoken update for the family: patient, procedure, that hospitals were found, insurance checked, and the claim filed — plain language>'} — this really generates the voice message;
+(3) from the result, run agentTools:logStep {journeyId:'$JID', agentName:'Notification Agent', message:'Family notified (voice <voiceStatus>)', kind:'action', tokens:<~180>, costUsd:<~0.001>};
+(4) run agentTools:patchJourney {journeyId:'$JID', progress:60};
+(5) run agentTools:setAgent {journeyId:'$JID', name:'Notification Agent', status:'done', progress:100}."
 
 echo "✓ Orchestration complete for $PATIENT. Open the Live Agents dashboard."

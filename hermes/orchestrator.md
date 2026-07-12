@@ -44,6 +44,14 @@ report that one error and stop; otherwise keep executing.
   diagnosis, …). Reason over `fields` — they are the actual numbers from the patient's documents.
 - `agentTools:linkupHospitalSearch` `{ procedure, city? }` → real web search →
   `{ ok, answer, sources }`. If `ok` is false, use your own knowledge and note it.
+- `agentTools:getUserLocation` `{ journeyId }` → `{ city, region, country, lat, lng }` — the
+  patient's real current location. Use its `city` for the hospital search.
+- `agentTools:addHospitalOption` `{ journeyId, name, area?, estCostInr?, coverageNote?, rating?,
+  distanceKm?, why?, source?, recommended? }` — record one real hospital (fills the Hospitals screen).
+- `agentTools:fileClaim` `{ journeyId, hospitalName?, amountInr?, insurer?, policyNumber?, summary }`
+  → `{ ok, emailStatus, employerPortalRef, reason? }` — really files the claim (email + employer portal).
+- `notify:notifyFamily` `{ journeyId, message }` → `{ ok, voiceStatus, reason? }` — really speaks a
+  family update via ElevenLabs and stores the audio (note: module is `notify`, not `agentTools`).
 
 ## Procedure
 STEP 0. Call `status` (above) and capture the dev `deploymentSelector`.
@@ -64,9 +72,11 @@ STEP 3. Run the specialists IN ORDER. For each: `setAgent` working → do the wo
   (cite the actual insurer, sum insured, or diagnosis). If a policy was read, `patchJourney
   { coverageLeftInr: <the real sumInsuredInr> }`. The Insurance Agent relies on what you surface.
 
-  **Hospital Agent** — `linkupHospitalSearch { procedure: <recommendedProcedure>, city: "Mumbai" }`.
-  Pick the 3 best hospitals with approx ₹ cost; `logStep` each (kind "info"); then
-  `addApproval { title: "Choose a hospital", detail: <the 3 options> }`.
+  **Hospital Agent** — first `getUserLocation { journeyId }` to get the patient's real
+  city (never hardcode a city). Then `linkupHospitalSearch { procedure: <recommendedProcedure>,
+  city: <that city> }` (omit `city` if unknown → India-wide). Pick the 3 best hospitals and record
+  each with `addHospitalOption { journeyId, name, area, estCostInr, coverageNote, why, source,
+  recommended }` (recommended:true for the single best). Then one `logStep` summary.
 
   **Insurance Agent** — reason about likely coverage for <recommendedProcedure> (est ₹<estCostInr>)
   under a typical Indian health policy; `logStep` a coverage verdict (kind "success");
@@ -76,7 +86,13 @@ STEP 3. Run the specialists IN ORDER. For each: `setAgent` working → do the wo
   missing; `patchJourney { documentsReady: <present count> }`; if any missing,
   `addApproval { title: "Upload missing documents", detail: <missing list> }`.
 
-  **Notification Agent** — `logStep` (kind "action") that the family was notified with a summary.
+  **Claim Agent** — `fileClaim { journeyId, hospitalName, amountInr, insurer?, policyNumber?,
+  summary }` — really emails the claim (Resend) and submits to the mocked employer portal. `logStep`
+  the returned `emailStatus` + `employerPortalRef`.
+
+  **Notification Agent** — `notify:notifyFamily { journeyId, message }` to really SPEAK a warm
+  update to the family (ElevenLabs → audio the app plays); then `logStep` (kind "action") with the
+  returned `voiceStatus`.
 
 STEP 4. `patchJourney { progress: 45 }` and a final Planner `logStep` summarizing what was done.
 Then reply with a 3-line summary of the journey you orchestrated.

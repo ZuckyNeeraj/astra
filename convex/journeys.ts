@@ -28,14 +28,29 @@ export const get = query({
     const journey = await ctx.db.get(id);
     if (!journey || journey.userId !== userId) return null; // ownership check
 
-    const [agents, activity, documents, approvals] = await Promise.all([
+    const [agents, activity, documents, approvals, hospitals, claims, notifs, plans] = await Promise.all([
       ctx.db.query("agents").withIndex("by_journey", (q) => q.eq("journeyId", id)).collect(),
       ctx.db.query("activity").withIndex("by_journey", (q) => q.eq("journeyId", id)).collect(),
       ctx.db.query("documents").withIndex("by_journey", (q) => q.eq("journeyId", id)).collect(),
       ctx.db.query("approvals").withIndex("by_journey", (q) => q.eq("journeyId", id)).collect(),
+      ctx.db.query("hospitals").withIndex("by_journey", (q) => q.eq("journeyId", id)).collect(),
+      ctx.db.query("claims").withIndex("by_journey", (q) => q.eq("journeyId", id)).collect(),
+      ctx.db.query("notifications").withIndex("by_journey", (q) => q.eq("journeyId", id)).collect(),
+      ctx.db.query("treatmentPlans").withIndex("by_user", (q) => q.eq("userId", userId)).collect(),
     ]);
 
-    return { journey, agents, activity, documents, approvals };
+    // The approved plan that started this journey (for its stages + cost).
+    const plan = plans.find((p) => p.journeyId === id) ?? null;
+
+    // Resolve a playable URL for each spoken notification.
+    const notifications = await Promise.all(
+      notifs.map(async (n) => ({
+        ...n,
+        audioUrl: n.audioStorageId ? await ctx.storage.getUrl(n.audioStorageId) : null,
+      })),
+    );
+
+    return { journey, agents, activity, documents, approvals, hospitals, claims, notifications, plan };
   },
 });
 

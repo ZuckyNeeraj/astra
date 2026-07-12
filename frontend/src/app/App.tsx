@@ -882,55 +882,66 @@ function AgentsScreen() {
 // ── Screen 3: Timeline ──────────────────────────────────────────────────────
 
 function TimelineScreen() {
-  const [selected, setSelected] = useState(2);
+  const journey = useQuery(api.journeys.listActive)?.[0];
+  const bundle = useQuery(api.journeys.get, journey ? { id: journey._id } : "skip");
+  const [selected, setSelected] = useState<number | null>(null);
 
-  const stages = [
-    { label: "Doctor Consultation",     status: "done"    as const, date: "Jun 28", sub: "Apollo Clinic, Bandra",     steps: ["GP consultation completed", "Referred to orthopedic surgeon", "Diagnosis: Grade 3 Osteoarthritis"] },
-    { label: "Insurance Pre-Authorization", status: "done" as const, date: "Jul 1",  sub: "Star Health Insurance",     steps: ["Policy benefits verified", "Surgery covered up to ₹5,00,000", "Pre-auth approved in 48 hours"] },
-    { label: "Hospital Booking",        status: "running" as const, date: "Jul 7",  sub: "3 hospitals shortlisted",   steps: ["Apollo Hospitals shortlisted", "Kokilaben Hospital shortlisted", "Awaiting slot confirmation"] },
-    { label: "Surgery",                 status: "pending" as const, date: "Jul 14", sub: "Total Knee Replacement",    steps: ["Pre-op blood work scheduled", "Anaesthesia consult required", "Surgery slot to be confirmed"] },
-    { label: "Recovery & Rehabilitation", status: "pending" as const, date: "Jul 15–28", sub: "In-hospital + home care", steps: ["4-day hospital stay", "Daily physiotherapy sessions", "Home nursing visits arranged"] },
-    { label: "Claim Filing",            status: "pending" as const, date: "Post-discharge", sub: "Star Health Insurance", steps: ["Collect discharge summary", "Submit all hospital bills", "Reimbursement within 7 days"] },
-  ];
-
+  const stages: string[] = bundle?.plan?.stages ?? [];
+  const currentIdx = Math.max(0, stages.findIndex((s) => s === journey?.stage));
+  const statusFor = (i: number): "done" | "running" | "pending" =>
+    i < currentIdx ? "done" : i === currentIdx ? "running" : "pending";
   const cfg = {
-    done:    { dot: "#0284C7", label: "Completed", bg: "#F0FDF4" },
-    running: { dot: "#0284C7", label: "In Progress", bg: "#E0FBFD" },
-    pending: { dot: "#a7c3e7", label: "Upcoming",   bg: "#F3F0EA" },
+    done:    { dot: "#0284C7", label: "Completed" },
+    running: { dot: "#0284C7", label: "In Progress" },
+    pending: { dot: "#a7c3e7", label: "Upcoming" },
   };
+  const activity = [...(bundle?.activity ?? [])].sort((a, b) => b.createdAt - a.createdAt);
+  const selIdx = selected ?? currentIdx;
+  const selLabel = stages[selIdx];
 
-  const sel = stages[selected];
+  if (!journey || stages.length === 0) {
+    return (
+      <>
+        <TopBar />
+        <div className="p-8">
+          <PageIntro title="Journey Timeline" subtitle="No active journey yet" />
+          <div className="bg-[#faf9f7] rounded-2xl p-10 border border-dashed border-[#CBD5E1] flex flex-col items-center text-center gap-2 mt-6">
+            <div className="w-12 h-12 rounded-2xl bg-[#E0FBFD] flex items-center justify-center mb-1"><GitBranch size={22} className="text-[#0284C7]" /></div>
+            <p className="font-bold text-[#0B192C]">No journey in progress</p>
+            <p className="text-sm text-[#64748B] max-w-sm">Approve a treatment plan and the journey's real stages will appear here.</p>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
       <TopBar />
       <div className="p-8 flex flex-col gap-6">
-        <PageIntro title="Journey Timeline" subtitle="Father's Knee Surgery - 72% complete across 6 stages" />
+        <PageIntro title="Journey Timeline" subtitle={`${journey.title} — ${journey.progress}% complete across ${stages.length} stages`} />
         <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 380px" }}>
           {/* Timeline */}
           <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
             <div className="flex flex-col">
-              {stages.map((stage, i) => {
-                const c = cfg[stage.status];
-                const isSelected = selected === i;
+              {stages.map((label, i) => {
+                const status = statusFor(i);
+                const c = cfg[status];
+                const isSelected = selIdx === i;
                 return (
                   <button key={i} className="flex gap-5 text-left group" onClick={() => setSelected(i)}>
                     <div className="flex flex-col items-center">
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 z-10 ring-2 transition-all ${isSelected ? "ring-[#0284C7] ring-offset-2" : "ring-transparent"}`} style={{ backgroundColor: c.dot }}>
-                        {stage.status === "done"    && <Check size={12} className="text-[#faf9f7]" />}
-                        {stage.status === "running" && <div className="w-2.5 h-2.5 bg-[#faf9f7] rounded-full animate-pulse" />}
-                        {stage.status === "pending" && <div className="w-2.5 h-2.5 bg-[#94A3B8] rounded-full" />}
+                        {status === "done"    && <Check size={12} className="text-[#faf9f7]" />}
+                        {status === "running" && <div className="w-2.5 h-2.5 bg-[#faf9f7] rounded-full animate-pulse" />}
+                        {status === "pending" && <div className="w-2.5 h-2.5 bg-[#94A3B8] rounded-full" />}
                       </div>
-                      {i < stages.length - 1 && <div className="w-0.5 flex-1 min-h-[32px]" style={{ backgroundColor: stage.status === "done" ? "#0284C7" : "#a7c3e7" }} />}
+                      {i < stages.length - 1 && <div className="w-0.5 flex-1 min-h-[32px]" style={{ backgroundColor: status === "done" ? "#0284C7" : "#a7c3e7" }} />}
                     </div>
 
                     <div className={`flex-1 pb-6 px-4 py-2 rounded-xl mb-1 transition-all ${isSelected ? "bg-[#F3F0EA] border border-[rgba(15,23,42,0.06)]" : "hover:bg-[#F3F0EA]/50"}`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-bold" style={{ color: c.dot }}>{c.label}</span>
-                        <span className="text-sm text-[#94A3B8]">{stage.date}</span>
-                      </div>
-                      <p className="font-bold text-[#0B192C]">{stage.label}</p>
-                      <p className="text-sm text-[#64748B]">{stage.sub}</p>
+                      <span className="text-sm font-bold" style={{ color: c.dot }}>{c.label}</span>
+                      <p className="font-bold text-[#0B192C]">{label}</p>
                     </div>
                   </button>
                 );
@@ -938,47 +949,28 @@ function TimelineScreen() {
             </div>
           </div>
 
-          {/* Detail panel */}
+          {/* Detail panel — real agent activity */}
           <div className="flex flex-col gap-4">
             <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm font-bold" style={{ color: cfg[sel.status].dot }}>
-                  {cfg[sel.status].label}
-                </span>
-              </div>
-              <h3 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-xl font-medium text-[#0B192C] mb-1">{sel.label}</h3>
-              <p className="text-sm text-[#64748B] mb-4">{sel.sub} · {sel.date}</p>
+              <span className="text-sm font-bold" style={{ color: cfg[statusFor(selIdx)].dot }}>{cfg[statusFor(selIdx)].label}</span>
+              <h3 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-xl font-medium text-[#0B192C] mb-1">{selLabel}</h3>
+              <p className="text-sm text-[#64748B] mb-4">Live activity logged by the agents</p>
 
               <div className="flex flex-col gap-2">
-                {sel.steps.map((step, j) => {
-                  const isDone    = sel.status === "done" || (sel.status === "running" && j < 2);
-                  const isCurrent = sel.status === "running" && j === 2;
-                  return (
-                    <div key={j} className={`flex items-center gap-3 p-3 rounded-xl ${isDone ? "bg-[#F0FDF4]" : isCurrent ? "bg-[#FFFBEB]" : "bg-[#F3F0EA]"}`}>
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${isDone ? "bg-[#D1FAE5]" : isCurrent ? "bg-[#FEF3C7]" : "bg-[#a7c3e7]"}`}>
-                        {isDone    ? <Check size={10} className="text-[#16A34A]" /> :
-                         isCurrent ? <Timer size={10} className="text-[#D97706]" /> :
-                                     <Circle size={10} className="text-[#CBD5E1]" />}
-                      </div>
-                      <span className={`text-sm ${isDone ? "text-[#64748B] line-through" : isCurrent ? "text-[#D97706] font-medium" : "text-[#CBD5E1]"}`}>
-                        {step}
-                      </span>
+                {activity.length === 0 && <p className="text-sm text-[#94A3B8]">No activity logged yet.</p>}
+                {activity.slice(0, 8).map((ev) => (
+                  <div key={ev._id} className="flex items-start gap-3 p-3 rounded-xl bg-[#F3F0EA]">
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 bg-[#E0FBFD]">
+                      <Activity size={10} className="text-[#0284C7]" />
                     </div>
-                  );
-                })}
+                    <div className="min-w-0">
+                      <p className="text-sm text-[#0B192C]">{ev.message}</p>
+                      <p className="text-[11px] text-[#94A3B8] mt-0.5">{ev.agentName} · {new Date(ev.createdAt).toLocaleTimeString("en-IN")}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-
-            {sel.status === "running" && (
-              <div className="bg-gradient-to-br from-[#0284C7] to-[#0284C7] rounded-2xl p-5 text-[#faf9f7]">
-                <div className="flex items-center gap-2 mb-2">
-                  <PulseDot color="#faf9f7" />
-                  <span className="text-xs font-bold opacity-80">AGENT WORKING</span>
-                </div>
-                <p className="font-bold">Hospital Agent is active</p>
-                <p className="text-sm opacity-75 mt-0.5">Comparing 3 hospitals on insurance coverage, wait time, and surgeon expertise</p>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -988,163 +980,173 @@ function TimelineScreen() {
 
 // ── Screen 4: Hospitals ─────────────────────────────────────────────────────
 
+// INR like ₹3,00,000, or "—" when absent (null-safe wrapper around inr()).
+function inrOr(n?: number | null) {
+  return n === undefined || n === null || !isFinite(n) ? "—" : inr(n);
+}
+
 function HospitalsScreen() {
-  const [filter, setFilter] = useState("All");
   const [selected, setSelected] = useState(0);
+  const [locating, setLocating] = useState(false);
+  const [locErr, setLocErr] = useState<string | null>(null);
 
-  const hospitals = [
-    { name: "Apollo Hospitals",  location: "Bandra West", dist: "3.2 km", rating: 4.8, wait: "2 days", oop: "₹28,000",  covered: true,  specialty: "Orthopedics Center of Excellence", beds: 650, pin: { x: "28%", y: "30%" }, surgeons: "Dr. Priya Sharma, Dr. Anand Rao" },
-    { name: "Kokilaben Hospital", location: "Andheri West", dist: "5.8 km", rating: 4.7, wait: "5 days", oop: "₹35,000", covered: true,  specialty: "Joint Replacement Unit",           beds: 750, pin: { x: "66%", y: "48%" }, surgeons: "Dr. Suresh Mehta, Dr. Kavitha Nair" },
-    { name: "Hinduja Hospital",  location: "Mahim",       dist: "4.1 km", rating: 4.6, wait: "3 days", oop: "₹22,000",  covered: false, specialty: "Orthopedic Surgery Dept.",         beds: 350, pin: { x: "47%", y: "66%" }, surgeons: "Dr. Vikram Singh" },
-  ];
+  const me = useQuery(api.users.current);
+  const journey = useQuery(api.journeys.listActive)?.[0];
+  const bundle = useQuery(api.journeys.get, journey ? { id: journey._id } : "skip");
+  const setLocation = useMutation(api.users.setLocation);
 
-  const filtered = filter === "Covered" ? hospitals.filter((h) => h.covered)
-    : filter === "< 5km" ? hospitals.filter((h) => parseFloat(h.dist) < 5)
-    : filter === "Top Rated" ? hospitals.filter((h) => h.rating >= 4.7)
-    : hospitals;
+  const loc = me?.location ?? null;
+  const cityLabel = loc?.city ? [loc.city, loc.region].filter(Boolean).join(", ") : null;
+  const hospitals = bundle?.hospitals ?? [];
+  const sel = hospitals[selected] ?? hospitals[0];
 
-  const sel = hospitals[selected];
+  async function useMyLocation() {
+    setLocErr(null);
+    if (!navigator.geolocation) { setLocErr("Location isn't available in this browser."); return; }
+    setLocating(true);
+    try {
+      const pos = await new Promise<GeolocationPosition>((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 10000 }));
+      const { latitude, longitude } = pos.coords;
+      let city: string | undefined, region: string | undefined, country: string | undefined;
+      try {
+        const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
+        const g = await r.json();
+        city = g.city || g.locality || undefined;
+        region = g.principalSubdivision || undefined;
+        country = g.countryName || undefined;
+      } catch { /* keep coords even if reverse-geocode fails */ }
+      await setLocation({ city, region, country, lat: latitude, lng: longitude });
+    } catch {
+      setLocErr("Couldn't read your location — please allow location access and retry.");
+    } finally {
+      setLocating(false);
+    }
+  }
+
+  const LocationButton = (
+    <button onClick={() => void useMyLocation()} disabled={locating}
+      className="flex items-center gap-1.5 text-sm font-bold px-3.5 py-2 rounded-xl bg-[#0284C7] text-[#faf9f7] hover:bg-[#0B192C] transition disabled:opacity-60">
+      <MapPin size={13} /> {locating ? "Locating…" : cityLabel ? "Update location" : "Use my location"}
+    </button>
+  );
 
   return (
     <>
       <TopBar />
       <div className="p-8 flex flex-col gap-6">
-        <PageIntro title="Hospital Discovery" subtitle="AI-matched hospitals for Total Knee Replacement - Star Health accepted" />
-        {/* Filters */}
-        <div className="flex items-center gap-3">
-          {["All", "Covered", "< 5km", "Top Rated"].map((f) => (
-            <button key={f} onClick={() => setFilter(f)}
-              className={`text-sm font-bold px-4 py-2 rounded-xl transition ${filter === f ? "bg-[#0284C7] text-[#faf9f7]" : "bg-[#faf9f7] text-[#64748B] border border-[rgba(15,23,42,0.08)] hover:border-[#0284C7] hover:text-[#0284C7]"}`}>
-              {f}
-            </button>
-          ))}
-          <div className="ml-auto flex items-center gap-2 text-xs text-[#64748B]">
-            <Activity size={14} /> Agent refreshed 2m ago
+        <PageIntro title="Hospital Discovery"
+          subtitle={journey ? `Hospitals for ${journey.patientName}'s ${journey.condition}` : "Hospitals matched by the Hospital Agent"} />
+
+        {/* Location bar */}
+        <div className="flex items-center gap-3 bg-[#faf9f7] rounded-2xl px-5 py-3.5 border border-[rgba(15,23,42,0.06)]">
+          <div className="w-9 h-9 rounded-xl bg-[#E0FBFD] flex items-center justify-center">
+            <MapPin size={16} className="text-[#0284C7]" />
           </div>
+          <div className="flex-1">
+            <p className="font-bold text-[#0B192C] text-sm">Searching near {cityLabel ?? "— location not set"}</p>
+            <p className="text-[11px] text-[#64748B]">{cityLabel ? "The Hospital Agent uses your current location" : "Share your location so the agent searches hospitals near you"}</p>
+          </div>
+          {LocationButton}
         </div>
+        {locErr && <p className="text-xs text-[#EF4444] -mt-3">{locErr}</p>}
 
-        <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 380px" }}>
-          {/* Map + list */}
-          <div className="flex flex-col gap-4">
-            {/* Map */}
-            <div className="rounded-2xl h-64 relative overflow-hidden border border-[rgba(15,23,42,0.06)]"
-              style={{ background: "linear-gradient(135deg, #E0FBFD 0%, #E0FBFD 50%, #B6F4FA 100%)" }}>
-              <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-                {[...Array(9)].map((_, i) => (
-                  <line key={`v${i}`} x1={`${i * 12.5}%`} y1="0" x2={`${i * 12.5}%`} y2="100%" stroke="#0284C7" strokeWidth="0.4" opacity="0.2" />
-                ))}
-                {[...Array(7)].map((_, i) => (
-                  <line key={`h${i}`} x1="0" y1={`${i * 16.7}%`} x2="100%" y2={`${i * 16.7}%`} stroke="#0284C7" strokeWidth="0.4" opacity="0.2" />
-                ))}
-                <path d="M50,130 Q150,100 250,115 Q350,130 500,105 Q620,85 750,110 Q850,125 950,95" fill="none" stroke="#0284C7" strokeWidth="2" opacity="0.35" />
-                <path d="M0,160 Q120,140 250,155 Q380,165 500,145 Q640,130 780,150 Q880,160 960,140" fill="none" stroke="#0284C7" strokeWidth="1.5" opacity="0.25" />
-                <path d="M80,80 Q200,70 350,90 Q480,105 600,85 Q720,70 850,88" fill="none" stroke="#0284C7" strokeWidth="1" opacity="0.15" />
-              </svg>
-
-              {hospitals.map((h, i) => (
-                <button key={h.name} className="absolute flex flex-col items-center transition-all hover:scale-110" style={{ left: h.pin.x, top: h.pin.y, transform: "translate(-50%,-100%)" }} onClick={() => setSelected(i)}>
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shadow-lg transition-all ${selected === i ? "bg-[#0284C7] scale-110" : "bg-[#faf9f7] border-2 border-[#0284C7]"}`}>
-                    <Building2 size={14} className={selected === i ? "text-[#faf9f7]" : "text-[#0284C7]"} />
-                  </div>
-                  <div className={`text-sm font-bold mt-0.5 px-2 py-0.5 rounded shadow-sm whitespace-nowrap ${selected === i ? "bg-[#0284C7] text-[#faf9f7]" : "bg-[#faf9f7] text-[#0B192C]"}`}>
-                    {h.name.split(" ")[0]}
-                  </div>
-                </button>
-              ))}
-
-              <div className="absolute" style={{ left: "50%", top: "52%", transform: "translate(-50%,-50%)" }}>
-                <div className="relative w-5 h-5">
-                  <div className="absolute inset-0 bg-[#0284C7] rounded-full animate-ping opacity-30" />
-                  <div className="relative w-5 h-5 bg-[#0284C7] rounded-full border-3 border-[#faf9f7] shadow-lg" />
-                </div>
-              </div>
-
-              <div className="absolute bottom-3 right-3 bg-[#faf9f7]/80 backdrop-blur rounded-xl px-3 py-1.5">
-                <span className="text-xs font-bold text-[#0B192C]">Mumbai, Maharashtra</span>
-              </div>
+        {hospitals.length === 0 ? (
+          <div className="bg-[#faf9f7] rounded-2xl p-10 border border-dashed border-[#CBD5E1] flex flex-col items-center text-center gap-2">
+            <div className="w-12 h-12 rounded-2xl bg-[#E0FBFD] flex items-center justify-center mb-1">
+              <Building2 size={22} className="text-[#0284C7]" />
             </div>
-
-            {/* Hospital cards */}
+            <p className="font-bold text-[#0B192C]">No hospitals yet</p>
+            <p className="text-sm text-[#64748B] max-w-sm">
+              {journey ? "The Hospital Agent will list real hospitals here once the journey runs." : "Start a journey, then the Hospital Agent will search hospitals near you."}
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 380px" }}>
+            {/* Hospital list */}
             <div className="flex flex-col gap-3">
-              {filtered.map((h, i) => (
-                <button key={h.name} onClick={() => setSelected(hospitals.indexOf(h))}
-                  className={`bg-[#faf9f7] rounded-2xl p-4 border text-left transition-all ${selected === hospitals.indexOf(h) ? "border-[#0284C7] shadow-md" : "border-[rgba(15,23,42,0.06)] hover:shadow-sm"}`}>
+              {hospitals.map((h, i) => (
+                <button key={h._id} onClick={() => setSelected(i)}
+                  className={`bg-[#faf9f7] rounded-2xl p-4 border text-left transition-all ${selected === i ? "border-[#0284C7] shadow-md" : "border-[rgba(15,23,42,0.06)] hover:shadow-sm"}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
                       <h3 className="font-medium text-[#0B192C]">{h.name}</h3>
-                      {h.covered && <span className="text-sm font-bold bg-[#F0FDF4] text-[#16A34A] px-2 py-0.5 rounded-full">COVERED</span>}
+                      {h.recommended && <span className="text-sm font-bold bg-[#F0FDF4] text-[#16A34A] px-2 py-0.5 rounded-full">RECOMMENDED</span>}
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <Star size={12} className="text-[#F59E0B] fill-[#F59E0B]" />
-                      <span className="font-bold text-[#0B192C] text-sm">{h.rating}</span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-[#0284C7] font-medium mb-3">{h.specialty}</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { label: "Distance",     value: h.dist  },
-                      { label: "Wait time",    value: h.wait  },
-                      { label: "Out-of-pocket", value: h.oop  },
-                    ].map((s) => (
-                      <div key={s.label} className="bg-[#F3F0EA] rounded-xl p-2">
-                        <p className="text-sm text-[#64748B] mb-0.5">{s.label}</p>
-                        <p className="text-xs font-bold text-[#0B192C]">{s.value}</p>
+                    {h.rating != null && (
+                      <div className="flex items-center gap-1.5">
+                        <Star size={12} className="text-[#F59E0B] fill-[#F59E0B]" />
+                        <span className="font-bold text-[#0B192C] text-sm">{h.rating}</span>
                       </div>
-                    ))}
+                    )}
+                  </div>
+                  {h.area && <p className="text-xs text-[#0284C7] font-medium mb-3">{h.area}</p>}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-[#F3F0EA] rounded-xl p-2">
+                      <p className="text-sm text-[#64748B] mb-0.5">Est. cost</p>
+                      <p className="text-xs font-bold text-[#0B192C]">{inrOr(h.estCostInr)}</p>
+                    </div>
+                    <div className="bg-[#F3F0EA] rounded-xl p-2">
+                      <p className="text-sm text-[#64748B] mb-0.5">Coverage</p>
+                      <p className="text-xs font-bold text-[#0B192C] truncate">{h.coverageNote ?? "—"}</p>
+                    </div>
                   </div>
                 </button>
               ))}
             </div>
-          </div>
 
-          {/* Detail sidebar */}
-          <div className="flex flex-col gap-4">
-            <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
-              <div className="flex items-center justify-between mb-1">
-                <h3 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-xl font-medium text-[#0B192C]">{sel.name}</h3>
-                {sel.covered && <span className="text-sm font-bold bg-[#F0FDF4] text-[#16A34A] px-2.5 py-1 rounded-full">STAR HEALTH COVERED</span>}
-              </div>
-              <p className="text-sm text-[#64748B] mb-5">{sel.location} · {sel.dist} away</p>
-
-              <div className="grid grid-cols-2 gap-3 mb-5">
-                {[
-                  { label: "Rating",       value: `${sel.rating} / 5.0`, color: "#F59E0B" },
-                  { label: "Wait Time",    value: sel.wait,               color: "#0284C7" },
-                  { label: "Out-of-Pocket", value: sel.oop,               color: "#8B5CF6" },
-                  { label: "Total Beds",   value: `${sel.beds}+`,         color: "#0284C7" },
-                ].map((s) => (
-                  <div key={s.label} className="bg-[#F3F0EA] rounded-xl p-3">
-                    <p className="text-sm text-[#64748B] mb-0.5">{s.label}</p>
-                    <p className="font-bold" style={{ color: s.color, fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>{s.value}</p>
+            {/* Detail sidebar */}
+            {sel && (
+              <div className="flex flex-col gap-4">
+                <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
+                  <div className="flex items-center justify-between mb-1 gap-2">
+                    <h3 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-xl font-medium text-[#0B192C]">{sel.name}</h3>
+                    {sel.recommended && <span className="text-sm font-bold bg-[#F0FDF4] text-[#16A34A] px-2.5 py-1 rounded-full whitespace-nowrap">TOP PICK</span>}
                   </div>
-                ))}
-              </div>
+                  {sel.area && <p className="text-sm text-[#64748B] mb-5">{sel.area}</p>}
 
-              <div className="mb-5">
-                <p className="text-xs text-[#64748B] mb-1.5">Specialty Unit</p>
-                <p className="font-medium text-[#0B192C] text-sm">{sel.specialty}</p>
-              </div>
+                  <div className="grid grid-cols-2 gap-3 mb-5">
+                    <div className="bg-[#F3F0EA] rounded-xl p-3">
+                      <p className="text-sm text-[#64748B] mb-0.5">Est. cost</p>
+                      <p className="font-bold text-[#0284C7]">{inrOr(sel.estCostInr)}</p>
+                    </div>
+                    {sel.rating != null && (
+                      <div className="bg-[#F3F0EA] rounded-xl p-3">
+                        <p className="text-sm text-[#64748B] mb-0.5">Rating</p>
+                        <p className="font-bold text-[#F59E0B]">{sel.rating} / 5.0</p>
+                      </div>
+                    )}
+                    {sel.distanceKm != null && (
+                      <div className="bg-[#F3F0EA] rounded-xl p-3">
+                        <p className="text-sm text-[#64748B] mb-0.5">Distance</p>
+                        <p className="font-bold text-[#0284C7]">{sel.distanceKm} km</p>
+                      </div>
+                    )}
+                  </div>
 
-              <div className="mb-5">
-                <p className="text-xs text-[#64748B] mb-1.5">Available Surgeons</p>
-                <p className="font-medium text-[#0B192C] text-sm">{sel.surgeons}</p>
+                  {sel.coverageNote && (
+                    <div className="mb-5">
+                      <p className="text-xs text-[#64748B] mb-1.5">Insurance coverage</p>
+                      <p className="font-medium text-[#0B192C] text-sm">{sel.coverageNote}</p>
+                    </div>
+                  )}
+                  {sel.why && (
+                    <div className="mb-5">
+                      <p className="text-xs text-[#64748B] mb-1.5">Why the agent picked this</p>
+                      <p className="font-medium text-[#0B192C] text-sm">{sel.why}</p>
+                    </div>
+                  )}
+                  {sel.source && (
+                    <a href={sel.source} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-sm font-bold text-[#0284C7] hover:underline">
+                      <ArrowRight size={13} /> Source
+                    </a>
+                  )}
+                </div>
               </div>
-
-              <button className="w-full bg-[#0284C7] hover:bg-[#0B192C] text-[#faf9f7] font-bold py-3 rounded-xl transition-colors">
-                Book Appointment
-              </button>
-            </div>
-
-            <div className="bg-gradient-to-br from-[#0284C7] to-[#0284C7] rounded-2xl p-5 text-[#faf9f7]">
-              <div className="flex items-center gap-2 mb-2">
-                <PulseDot color="#faf9f7" />
-                <span className="text-xs font-bold opacity-80">HOSPITAL AGENT</span>
-              </div>
-              <p className="font-bold">Apollo Hospitals recommended</p>
-              <p className="text-sm opacity-75 mt-1">Best combination of insurance coverage, wait time, and surgeon expertise for your father's TKR surgery.</p>
-            </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
     </>
   );
@@ -1153,179 +1155,147 @@ function HospitalsScreen() {
 // ── Screen 5: Insurance ─────────────────────────────────────────────────────
 
 function InsuranceScreen() {
-  const claimSteps = ["Initiated", "Docs Collected", "Submitted", "Under Review", "Approved", "Paid"];
-  const current = 2;
+  const journey = useQuery(api.journeys.listActive)?.[0];
+  const bundle = useQuery(api.journeys.get, journey ? { id: journey._id } : "skip");
+  const vault = useQuery(api.vault.list);
 
-  const coverageData = [
-    { name: "Used", value: 80000 },
-    { name: "Remaining", value: 420000 },
-  ];
+  // Real policy comes from the parsed insurance document in the vault.
+  const policy = (vault ?? []).find((v: any) => v.docKind === "insurance_policy");
+  const pf: Record<string, string> = policy?.extractedFields ?? {};
+  const num = (s?: string) => { const n = s ? Number(String(s).replace(/[^\d.]/g, "")) : NaN; return isFinite(n) ? n : undefined; };
+
+  const sumInsured = num(pf.sumInsuredInr);
+  const remaining = journey?.coverageLeftInr ?? sumInsured;
+  const used = sumInsured != null && remaining != null ? Math.max(0, sumInsured - remaining) : undefined;
+  const usedPct = sumInsured && used != null ? Math.round((used / sumInsured) * 100) : undefined;
+  const estCost = bundle?.plan?.estCostInr;
+  const oop = estCost != null && remaining != null ? Math.max(0, estCost - remaining) : undefined;
+
   const COLORS = ["#0284C7", "#a7c3e7"];
+  const coverageData = sumInsured != null && used != null
+    ? [{ name: "Used", value: used }, { name: "Remaining", value: Math.max(0, sumInsured - used) }]
+    : null;
 
-  const monthlyData = [
-    { month: "Mar", amount: 0 },
-    { month: "Apr", amount: 15000 },
-    { month: "May", amount: 15000 },
-    { month: "Jun", amount: 35600 },
-    { month: "Jul", amount: 80000 },
-  ];
+  const insuranceActivity = [...(bundle?.activity ?? [])]
+    .filter((a) => a.agentName.toLowerCase().includes("insurance"))
+    .sort((a, b) => b.createdAt - a.createdAt);
 
-  const barData = [
-    { label: "Diagnostic", amount: 12400 },
-    { label: "Consult", amount: 3200 },
-    { label: "Pre-op", amount: 4800 },
-    { label: "Surgery*", amount: 152000 },
-  ];
+  const insurerLabel = pf.insurer
+    ? `${pf.insurer}${pf.policyNumber ? ` · Policy ${pf.policyNumber}` : ""}`
+    : "No insurance policy parsed yet — upload one in the Vault";
 
   return (
     <>
       <TopBar />
       <div className="p-8 flex flex-col gap-6">
-        <PageIntro title="Insurance & Claims" subtitle="Star Health Comprehensive - Policy #SHC-2024-887231" />
-        {/* Top row */}
+        <PageIntro title="Insurance & Claims" subtitle={insurerLabel} />
+
         <div className="grid gap-6" style={{ gridTemplateColumns: "300px 1fr" }}>
           {/* Coverage donut */}
           <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)] flex flex-col items-center">
-            <p className="font-bold text-[#0B192C] text-sm mb-4 self-start">Annual Coverage</p>
-            <div className="relative">
-              <ResponsiveContainer width={180} height={180}>
-                <PieChart>
-                  <Pie data={coverageData} cx="50%" cy="50%" innerRadius={55} outerRadius={80} dataKey="value" startAngle={90} endAngle={-270} strokeWidth={0}>
-                    {coverageData.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex items-center justify-center flex-col">
-                <span className="text-2xl font-bold text-[#0B192C]" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>16%</span>
-                <span className="text-xs text-[#64748B]">used</span>
-              </div>
-            </div>
-            <div className="w-full mt-4 flex flex-col gap-2">
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-sm bg-[#0284C7]" /><span className="text-[#64748B]">Used</span></div>
-                <span className="font-bold text-[#0B192C]" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>₹80,000</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-sm bg-[#a7c3e7]" /><span className="text-[#64748B]">Remaining</span></div>
-                <span className="font-bold text-[#0B192C]" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>₹4,20,000</span>
-              </div>
-            </div>
+            <p className="font-bold text-[#0B192C] text-sm mb-4 self-start">Coverage</p>
+            {coverageData ? (
+              <>
+                <div className="relative">
+                  <ResponsiveContainer width={180} height={180}>
+                    <PieChart>
+                      <Pie data={coverageData} cx="50%" cy="50%" innerRadius={55} outerRadius={80} dataKey="value" startAngle={90} endAngle={-270} strokeWidth={0}>
+                        {coverageData.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex items-center justify-center flex-col">
+                    <span className="text-2xl font-bold text-[#0B192C]">{usedPct ?? 0}%</span>
+                    <span className="text-xs text-[#64748B]">used</span>
+                  </div>
+                </div>
+                <div className="w-full mt-4 flex flex-col gap-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-sm bg-[#0284C7]" /><span className="text-[#64748B]">Used</span></div>
+                    <span className="font-bold text-[#0B192C]">{inrOr(used)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-sm bg-[#a7c3e7]" /><span className="text-[#64748B]">Remaining</span></div>
+                    <span className="font-bold text-[#0B192C]">{inrOr(remaining)}</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-[#94A3B8] py-10 text-center">Upload your insurance policy in the Vault — the Health Vault agent will read the sum insured and it'll show here.</p>
+            )}
           </div>
 
-          {/* Stats + claim pipeline */}
+          {/* Stats + insurance agent activity */}
           <div className="flex flex-col gap-4">
-            <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+            <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
               {[
-                { label: "Surgery Estimate",         value: "₹1,80,000", color: "#0284C7" },
-                { label: "Expected Reimbursement",   value: "₹1,52,000", color: "#0284C7" },
-                { label: "Deductible",               value: "₹10,000",   color: "#F59E0B" },
-                { label: "Co-pay",                   value: "10%",        color: "#8B5CF6" },
+                { label: "Sum Insured",       value: inrOr(sumInsured),  color: "#0284C7" },
+                { label: "Procedure Estimate", value: inrOr(estCost),    color: "#0284C7" },
+                { label: "Est. Out-of-Pocket", value: inrOr(oop),        color: "#8B5CF6" },
               ].map((s) => (
                 <div key={s.label} className="bg-[#faf9f7] rounded-2xl p-4 border border-[rgba(15,23,42,0.06)]">
                   <p className="text-xs text-[#64748B] mb-1">{s.label}</p>
-                  <p className="text-xl font-bold" style={{ color: s.color, fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>{s.value}</p>
+                  <p className="text-xl font-bold" style={{ color: s.color }}>{s.value}</p>
                 </div>
               ))}
             </div>
 
-            {/* Claim pipeline */}
             <div className="bg-[#faf9f7] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)] flex-1">
-              <p className="font-bold text-[#0B192C] text-sm mb-5">Current Claim Pipeline</p>
-              <div className="flex items-center">
-                {claimSteps.map((step, i) => (
-                  <div key={step} className="flex items-center flex-1">
-                    <div className="flex flex-col items-center flex-1">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mb-2 ${
-                        i < current ? "bg-[#0284C7] text-[#faf9f7]" : i === current ? "bg-[#0284C7] text-[#faf9f7]" : "bg-[#a7c3e7] text-[#94A3B8]"
-                      }`}>
-                        {i < current ? <Check size={12} /> : i + 1}
+              <p className="font-bold text-[#0B192C] text-sm mb-4">Insurance Agent Activity</p>
+              {insuranceActivity.length === 0 ? (
+                <p className="text-sm text-[#94A3B8]">The Insurance Agent hasn't run on this journey yet.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {insuranceActivity.slice(0, 5).map((ev) => (
+                    <div key={ev._id} className="flex items-start gap-3 p-3 rounded-xl bg-[#F3F0EA]">
+                      <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 bg-[#E0FBFD]"><Shield size={10} className="text-[#0284C7]" /></div>
+                      <div className="min-w-0">
+                        <p className="text-sm text-[#0B192C]">{ev.message}</p>
+                        <p className="text-[11px] text-[#94A3B8] mt-0.5">{new Date(ev.createdAt).toLocaleString("en-IN")}</p>
                       </div>
-                      <span className="text-sm text-[#64748B] text-center">{step}</span>
                     </div>
-                    {i < claimSteps.length - 1 && <div className={`h-0.5 flex-1 mb-6 ${i < current ? "bg-[#0284C7]" : "bg-[#a7c3e7]"}`} />}
-                  </div>
-                ))}
-              </div>
-              <div className="bg-[#E0FBFD] rounded-xl p-3 mt-4">
-                <p className="text-xs font-bold text-[#0284C7]">Docs Collected stage — agent is active</p>
-                <p className="text-xs text-[#64748B] mt-0.5">Document Agent collecting discharge summary and hospital bills. Estimated 3 days to complete.</p>
-              </div>
+                  ))}
+                </div>
+              )}
+              {bundle?.plan?.coverageNote && (
+                <div className="bg-[#E0FBFD] rounded-xl p-3 mt-4">
+                  <p className="text-xs font-bold text-[#0284C7]">Coverage note</p>
+                  <p className="text-xs text-[#64748B] mt-0.5">{bundle.plan.coverageNote}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Charts row */}
-        <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          {/* Area chart */}
+        {/* Claims filed by the Claim Agent */}
+        {(bundle?.claims?.length ?? 0) > 0 && (
           <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
-            <p className="font-bold text-[#0B192C] text-sm mb-4">Coverage Usage This Year</p>
-            <ResponsiveContainer width="100%" height={180}>
-              <AreaChart data={monthlyData}>
-                <defs>
-                  <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0284C7" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#0284C7" stopOpacity={0.01} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.04)" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#94A3B8" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#94A3B8" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: number) => [`₹${v.toLocaleString()}`, "Amount used"]} contentStyle={{ fontSize: 12, borderRadius: 12, border: "1px solid rgba(15,23,42,0.08)" }} />
-                <Area type="monotone" dataKey="amount" stroke="#0284C7" strokeWidth={2} fill="url(#areaGrad)" dot={{ fill: "#0284C7", r: 4 }} />
-              </AreaChart>
-            </ResponsiveContainer>
+            <p className="font-bold text-[#0B192C] text-sm mb-4">Claims filed</p>
+            <div className="flex flex-col gap-3">
+              {[...(bundle?.claims ?? [])].sort((a, b) => b.createdAt - a.createdAt).map((c) => {
+                const emailBadge = c.emailStatus === "sent"
+                  ? { t: "EMAIL SENT", cls: "bg-[#F0FDF4] text-[#16A34A]" }
+                  : c.emailStatus === "failed"
+                  ? { t: "EMAIL FAILED", cls: "bg-[#FEF2F2] text-[#FF6B6B]" }
+                  : { t: "RECORDED", cls: "bg-[#FFFBEB] text-[#D97706]" };
+                return (
+                  <div key={c._id} className="rounded-xl border border-[rgba(15,23,42,0.06)] p-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="font-bold text-[#0B192C] text-sm">{c.hospitalName ?? "Claim"} · {inrOr(c.amountInr)}</p>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full tracking-widest ${emailBadge.cls}`}>{emailBadge.t}</span>
+                    </div>
+                    {c.summary && <p className="text-xs text-[#64748B] mb-2">{c.summary}</p>}
+                    <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-[#94A3B8] font-mono">
+                      {c.toEmail && <span>to {c.toEmail}</span>}
+                      {c.employerPortalRef && <span>employer ref {c.employerPortalRef}</span>}
+                      <span>{new Date(c.createdAt).toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-
-          {/* Bar chart */}
-          <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
-            <p className="font-bold text-[#0B192C] text-sm mb-1">Reimbursements Breakdown</p>
-            <p className="text-xs text-[#64748B] mb-4">*Surgery is an estimate</p>
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={barData} barSize={32}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.04)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94A3B8" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#94A3B8" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: number) => [`₹${v.toLocaleString()}`, "Amount"]} contentStyle={{ fontSize: 12, borderRadius: 12, border: "1px solid rgba(15,23,42,0.08)" }} />
-                <Bar dataKey="amount" fill="#0284C7" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Past claims table */}
-        <div className="bg-[#faf9f7] rounded-2xl border border-[rgba(15,23,42,0.06)] overflow-hidden">
-          <div className="px-6 py-4 border-b border-[rgba(15,23,42,0.06)]">
-            <p className="font-bold text-[#0B192C] text-sm">Reimbursement History</p>
-          </div>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-[rgba(15,23,42,0.04)]">
-                {["Description", "Date", "Amount", "Submitted", "Status"].map((h) => (
-                  <th key={h} className="px-6 py-3 text-left text-sm font-bold text-[#94A3B8]">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                { desc: "Diagnostic & Imaging Tests",  date: "Jun 15, 2025", amount: "₹12,400", submitted: "Jun 17, 2025", status: "Paid"       },
-                { desc: "Orthopedic Specialist Consult", date: "Jun 28, 2025", amount: "₹3,200",  submitted: "Jun 29, 2025", status: "Paid"       },
-                { desc: "Pre-operative Blood Panel",   date: "Jul 5, 2025",  amount: "₹4,800",  submitted: "Jul 6, 2025",  status: "Processing" },
-              ].map((r, i) => (
-                <tr key={i} className="border-b border-[rgba(15,23,42,0.04)] last:border-0 hover:bg-[#F3F0EA] transition-colors">
-                  <td className="px-6 py-4 text-sm font-medium text-[#0B192C]">{r.desc}</td>
-                  <td className="px-6 py-4 text-sm text-[#64748B]">{r.date}</td>
-                  <td className="px-6 py-4 text-sm font-bold text-[#0B192C]">{r.amount}</td>
-                  <td className="px-6 py-4 text-sm text-[#64748B]">{r.submitted}</td>
-                  <td className="px-6 py-4">
-                    <span className={`text-xs font-medium px-3 py-1 rounded-full ${r.status === "Paid" ? "bg-[#F0FDF4] text-[#16A34A]" : "bg-[#FFFBEB] text-[#D97706]"}`}>
-                      {r.status.toUpperCase()}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        )}
       </div>
     </>
   );
@@ -1550,25 +1520,20 @@ function VaultScreen() {
 // ── Screen 7: Approvals ─────────────────────────────────────────────────────
 
 function ApprovalsScreen() {
-  const [done, setDone] = useState<Set<string>>(new Set());
+  const journey = useQuery(api.journeys.listActive)?.[0];
+  const bundle = useQuery(api.journeys.get, journey ? { id: journey._id } : "skip");
+  const decide = useMutation(api.approvals.decide);
+  const [busy, setBusy] = useState<string | null>(null);
 
-  const approvals = [
-    { id: "1", title: "Approve Hospital Selection",  urgency: "high" as const,   agent: "Hospital Agent",  color: "#0284C7", action: "Confirm Hospital",
-      detail: "Apollo Hospitals, Bandra is recommended for your father's Total Knee Replacement surgery. Star Health accepted, wait time 2 days, estimated out-of-pocket ₹28,000. Dr. Priya Sharma is available on Jul 14." },
-    { id: "2", title: "Upload MRI Report",           urgency: "high" as const,   agent: "Document Agent",  color: "#F59E0B", action: "Upload Document",
-      detail: "Insurance pre-authorization requires the MRI report dated Jun 25, 2025. This document is needed to proceed with the ₹5L coverage approval. Please upload it to the Document Vault." },
-    { id: "3", title: "Confirm Surgery Slot",        urgency: "medium" as const, agent: "Planner Agent",   color: "#8B5CF6", action: "Confirm Slot",
-      detail: "Surgery slot available: July 14, 2025 at 9:00 AM with Dr. Priya Sharma (Sr. Orthopedic Surgeon) at Apollo Hospitals, Bandra. Confirm to block the OT slot and trigger pre-op protocols." },
-  ];
+  const all = bundle?.approvals ?? [];
+  const pending = all.filter((a) => a.status === "pending");
+  const history = all.filter((a) => a.status !== "pending").sort((x, y) => y.createdAt - x.createdAt);
+  const remaining = pending.length;
 
-  const history = [
-    { title: "Pre-authorization consent signed",   date: "Jul 1 · 3:40 PM",   approved: true  },
-    { title: "GP referral letter accepted",         date: "Jun 28 · 11:20 AM", approved: true  },
-    { title: "Alternate hospital declined",         date: "Jun 30 · 5:15 PM",  approved: false },
-    { title: "Diagnostic test package approved",    date: "Jun 15 · 9:00 AM",  approved: true  },
-  ];
-
-  const remaining = approvals.filter((a) => !done.has(a.id)).length;
+  async function act(id: string, status: "approved" | "rejected") {
+    setBusy(id);
+    try { await decide({ id: id as any, status }); } finally { setBusy(null); }
+  }
 
   return (
     <>
@@ -1578,67 +1543,60 @@ function ApprovalsScreen() {
         <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 360px" }}>
           {/* Approval cards */}
           <div className="flex flex-col gap-4">
-            {approvals.map((a) => {
-              const approved = done.has(a.id);
-              return (
-                <div key={a.id} className={`bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)] transition-all ${approved ? "opacity-50 scale-[0.99]" : ""}`}>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <span className={`text-xs font-medium px-3 py-1 rounded-full ${a.urgency === "high" ? "bg-[#FEF2F2] text-[#FF6B6B]" : "bg-[#FFFBEB] text-[#D97706]"}`}>
-                        {a.urgency.toUpperCase()} PRIORITY
-                      </span>
-                      <span className="text-xs text-[#94A3B8] font-medium">Requested by {a.agent}</span>
-                    </div>
-                    {approved && (
-                      <div className="flex items-center gap-1.5 text-[#16A34A]">
-                        <CheckCircle2 size={14} />
-                        <span className="text-xs font-bold">Approved</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <h3 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-xl font-medium text-[#0B192C] mb-2">{a.title}</h3>
-                  <p className="text-sm text-[#64748B] mb-5">{a.detail}</p>
-
-                  {!approved ? (
-                    <div className="flex gap-3">
-                      <button onClick={() => setDone(new Set([...done, a.id]))}
-                        className="flex-1 py-3 rounded-xl font-bold text-[#faf9f7] text-sm transition-all active:scale-95 hover:opacity-90"
-                        style={{ backgroundColor: a.color }}>
-                        {a.action}
-                      </button>
-                      <button className="px-6 py-3 rounded-xl font-bold text-sm text-[#64748B] bg-[#EEEAE2] hover:bg-[#a7c3e7] transition">
-                        Decline
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center gap-2 py-3 bg-[#F0FDF4] rounded-xl border border-[#D1FAE5]">
-                      <CheckCircle2 size={16} className="text-[#16A34A]" />
-                      <span className="text-sm font-bold text-[#16A34A]">Decision recorded — agents notified</span>
-                    </div>
-                  )}
+            {pending.length === 0 && (
+              <div className="bg-[#faf9f7] rounded-2xl p-10 border border-dashed border-[#CBD5E1] flex flex-col items-center text-center gap-2">
+                <div className="w-12 h-12 rounded-2xl bg-[#F0FDF4] flex items-center justify-center mb-1">
+                  <CheckCircle2 size={22} className="text-[#16A34A]" />
                 </div>
-              );
-            })}
+                <p className="font-bold text-[#0B192C]">Nothing needs your approval</p>
+                <p className="text-sm text-[#64748B] max-w-sm">When an agent needs a human decision, it'll appear here.</p>
+              </div>
+            )}
+            {pending.map((a) => (
+              <div key={a._id} className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)] transition-all">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-medium px-3 py-1 rounded-full bg-[#FFFBEB] text-[#D97706]">AWAITING DECISION</span>
+                  <span className="text-xs text-[#94A3B8] font-medium">{new Date(a.createdAt).toLocaleString("en-IN")}</span>
+                </div>
+
+                <h3 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-xl font-medium text-[#0B192C] mb-2">{a.title}</h3>
+                <p className="text-sm text-[#64748B] mb-5">{a.detail}</p>
+
+                <div className="flex gap-3">
+                  <button onClick={() => void act(a._id, "approved")} disabled={busy === a._id}
+                    className="flex-1 py-3 rounded-xl font-bold text-[#faf9f7] text-sm transition-all active:scale-95 hover:opacity-90 bg-[#0284C7] disabled:opacity-60">
+                    {busy === a._id ? "Saving…" : "Approve"}
+                  </button>
+                  <button onClick={() => void act(a._id, "rejected")} disabled={busy === a._id}
+                    className="px-6 py-3 rounded-xl font-bold text-sm text-[#64748B] bg-[#EEEAE2] hover:bg-[#a7c3e7] transition disabled:opacity-60">
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* History panel */}
           <div className="flex flex-col gap-4">
             <div className="bg-[#faf9f7] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
               <p className="font-bold text-[#0B192C] text-sm mb-4">Decision History</p>
-              <div className="flex flex-col gap-0">
-                {history.map((d, i) => (
-                  <div key={i} className="flex items-center gap-3 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${d.approved ? "bg-[#F0FDF4]" : "bg-[#FEF2F2]"}`}>
-                      {d.approved ? <Check size={13} className="text-[#16A34A]" /> : <X size={13} className="text-[#FF6B6B]" />}
+              {history.length === 0 ? (
+                <p className="text-sm text-[#94A3B8] py-2">No decisions yet.</p>
+              ) : (
+                <div className="flex flex-col gap-0">
+                  {history.map((d) => (
+                    <div key={d._id} className="flex items-center gap-3 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${d.status === "approved" ? "bg-[#F0FDF4]" : "bg-[#FEF2F2]"}`}>
+                        {d.status === "approved" ? <Check size={13} className="text-[#16A34A]" /> : <X size={13} className="text-[#FF6B6B]" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-[#0B192C]">{d.title}</p>
+                        <p className="text-sm text-[#94A3B8] mt-0.5">{new Date(d.createdAt).toLocaleString("en-IN")}</p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[#0B192C]">{d.title}</p>
-                      <p className="text-sm text-[#94A3B8] mt-0.5">{d.date}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="bg-[#F3F0EA] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
@@ -1668,164 +1626,60 @@ function ApprovalsScreen() {
 // ── Screen 8: Voice ─────────────────────────────────────────────────────────
 
 function VoiceScreen() {
-  const [phase, setPhase] = useState<"idle" | "listening" | "processing" | "launched">("idle");
-
-  useEffect(() => {
-    if (phase === "listening") {
-      const t = setTimeout(() => setPhase("processing"), 2800);
-      return () => clearTimeout(t);
-    }
-    if (phase === "processing") {
-      const t = setTimeout(() => setPhase("launched"), 1800);
-      return () => clearTimeout(t);
-    }
-  }, [phase]);
+  const journey = useQuery(api.journeys.listActive)?.[0];
+  const bundle = useQuery(api.journeys.get, journey ? { id: journey._id } : "skip");
+  const notifications = [...(bundle?.notifications ?? [])].sort((a, b) => b.createdAt - a.createdAt);
+  const latest = notifications[0];
 
   return (
     <>
       <TopBar />
       <div className="p-8 flex flex-col gap-6">
-        <PageIntro title="Voice Command" subtitle="Speak naturally - Astra will handle the rest" />
+        <PageIntro title="Voice Updates" subtitle="Spoken updates your Notification Agent sends the family — generated with ElevenLabs" />
         <div className="grid gap-8" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          {/* Left: mic */}
-          <div className="bg-[#faf9f7] rounded-3xl border border-[rgba(15,23,42,0.06)] flex flex-col items-center justify-center py-16 px-8">
-            {phase !== "launched" ? (
+          {/* Left: latest spoken update */}
+          <div className="bg-[#faf9f7] rounded-3xl border border-[rgba(15,23,42,0.06)] flex flex-col items-center justify-center py-16 px-8 text-center">
+            <div className={`w-28 h-28 rounded-full flex items-center justify-center mb-8 ${latest?.audioUrl ? "bg-[#0284C7]" : "bg-[#0B192C]"}`}>
+              <Mic size={44} className="text-[#faf9f7]" />
+            </div>
+            {latest ? (
               <>
-                <div className="text-center mb-12">
-                  <h2 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-3xl font-medium text-[#0B192C] mb-2">
-                    {phase === "processing" ? "Launching your team…" : "Talk to Astra"}
-                  </h2>
-                  <p className="text-[#64748B]">
-                    {phase === "idle"      && "Press the mic and describe your healthcare need"}
-                    {phase === "listening" && "Listening — speak naturally"}
-                    {phase === "processing" && "Astra understood — deploying agents"}
-                  </p>
-                </div>
-
-                <div className="relative mb-12" onClick={() => phase === "idle" && setPhase("listening")}>
-                  {phase !== "idle" && (
-                    <>
-                      <div className="absolute inset-0 rounded-full bg-[#0284C7]" style={{ animation: "ripple2 1.6s ease-out infinite", opacity: 0.12, transform: "scale(1.8)" }} />
-                      <div className="absolute inset-0 rounded-full bg-[#0284C7]" style={{ animation: "ripple2 1.6s ease-out 0.5s infinite", opacity: 0.08, transform: "scale(1.5)" }} />
-                    </>
-                  )}
-                  <button className={`relative w-36 h-36 rounded-full flex items-center justify-center shadow-2xl transition-all ${
-                    phase === "idle"       ? "bg-[#0B192C] cursor-pointer hover:scale-105 hover:shadow-3xl active:scale-95"
-                    : phase === "processing" ? "bg-[#0284C7]"
-                    :                        "bg-[#0284C7]"
-                  }`}>
-                    {phase === "processing"
-                      ? <RefreshCw size={48} className="text-[#faf9f7] animate-spin" />
-                      : <Mic size={48} className="text-[#faf9f7]" />}
-                  </button>
-                </div>
-
-                {phase === "listening" && (
-                  <div className="flex items-center gap-[3px] h-14 mb-8">
-                    {[...Array(36)].map((_, i) => (
-                      <div key={i} className="w-[3px] bg-[#0284C7] rounded-full"
-                        style={{ animation: `waveBar2 0.7s ease-in-out ${i * 0.035}s infinite alternate`, minHeight: 3 }} />
-                    ))}
-                  </div>
-                )}
-
-                {phase === "idle" && (
-                  <div className="flex flex-col gap-2.5 w-full max-w-sm">
-                    <p className="text-xs text-[#94A3B8] font-medium text-center mb-1">TRY SAYING</p>
-                    {[
-                      "\"My father needs knee surgery\"",
-                      "\"Book a diabetes specialist in Mumbai\"",
-                      "\"Check my insurance coverage for cardiac care\"",
-                    ].map((phrase) => (
-                      <button key={phrase} onClick={() => setPhase("listening")}
-                        className="text-sm text-[#64748B] bg-[#F3F0EA] border border-[rgba(15,23,42,0.08)] rounded-xl px-5 py-3 text-left hover:border-[#0284C7] hover:text-[#0284C7] hover:bg-[#E0FBFD] transition-all font-medium">
-                        {phrase}
-                      </button>
-                    ))}
-                  </div>
+                <h2 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-2xl font-medium text-[#0B192C] mb-3">Latest update</h2>
+                <p className="text-[#64748B] mb-6 max-w-md">{latest.text}</p>
+                {latest.audioUrl ? (
+                  <audio controls src={latest.audioUrl} className="w-full max-w-sm" />
+                ) : (
+                  <p className="text-xs text-[#94A3B8]">Voice not generated (set <span className="font-mono">ELEVENLABS_API_KEY</span> to hear it spoken).</p>
                 )}
               </>
             ) : (
-              <div className="w-full" style={{ animation: "fadeUp2 0.4s ease-out" }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <PulseDot size="md" />
-                  <span className="text-xs font-bold text-[#0284C7]">ASTRA LAUNCHED</span>
-                </div>
-                <h2 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-2xl font-medium text-[#0B192C] mb-1">Journey Created</h2>
-                <p className="text-sm text-[#64748B] mb-6">"My father needs knee surgery" → 6-stage journey initiated</p>
-
-                <div className="rounded-2xl p-5 text-[#faf9f7] mb-5" style={{ background: "linear-gradient(135deg,#0284C7,#0284C7)" }}>
-                  <p className="text-xs opacity-70 font-bold mb-1">ASTRA UNDERSTOOD</p>
-                  <p className="font-bold text-lg">Father · Knee Surgery Journey</p>
-                  <p className="text-sm opacity-75">6 agents deployed · Running autonomously</p>
-                </div>
-
-                <button onClick={() => setPhase("idle")} className="w-full py-3 rounded-xl border border-[rgba(15,23,42,0.08)] text-sm font-medium text-[#64748B] hover:bg-[#F3F0EA] transition">
-                  Try another command
-                </button>
-              </div>
+              <>
+                <h2 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-2xl font-medium text-[#0B192C] mb-2">No updates yet</h2>
+                <p className="text-[#64748B] max-w-md">When the Notification Agent runs, it speaks a warm update for the family here.</p>
+              </>
             )}
           </div>
 
-          {/* Right: live deployment or how-it-works */}
+          {/* Right: history of spoken updates */}
           <div className="flex flex-col gap-4">
-            {phase === "launched" ? (
-              <>
-                <p className="font-bold text-[#0B192C]">Agents Deployed</p>
-                {[
-                  { agent: "Planner Agent",   action: "Creating 6-stage surgery journey plan",          color: "#0284C7" },
-                  { agent: "Insurance Agent", action: "Scanning Star Health policy for TKR coverage",   color: "#8B5CF6" },
-                  { agent: "Hospital Agent",  action: "Searching TKR specialists within 10 km",         color: "#0284C7" },
-                  { agent: "Document Agent",  action: "Identifying 7 required documents for surgery",   color: "#F59E0B" },
-                  { agent: "Claim Agent",     action: "Preparing post-surgery claim framework",         color: "#64748B" },
-                  { agent: "Notification Agent", action: "Setting up patient & hospital communication", color: "#16A34A" },
-                ].map((a, i) => (
-                  <div key={i} className="bg-[#faf9f7] rounded-xl p-4 border border-[rgba(15,23,42,0.06)] flex items-center gap-3" style={{ animation: `fadeUp2 ${0.3 + i * 0.1}s ease-out` }}>
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${a.color}18` }}>
-                      <Bot size={16} style={{ color: a.color }} />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-[#0B192C]">{a.agent}</p>
-                      <p className="text-xs text-[#64748B]">{a.action}</p>
-                    </div>
-                    <PulseDot color={a.color} />
-                  </div>
-                ))}
-              </>
-            ) : (
-              <>
-                <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
-                  <p className="font-bold text-[#0B192C] mb-4">How Voice Works</p>
-                  <div className="flex flex-col gap-4">
-                    {[
-                      { step: "1", title: "You speak",     desc: "Say what your patient needs in plain language — no commands required",        color: "#0284C7" },
-                      { step: "2", title: "Astra parses",  desc: "AI extracts intent, patient, condition, and urgency from your statement",    color: "#8B5CF6" },
-                      { step: "3", title: "Team deploys",  desc: "6 specialist agents are automatically assigned and begin working instantly", color: "#0284C7" },
-                      { step: "4", title: "You watch",     desc: "The dashboard transforms into your healthcare execution center",              color: "#F59E0B" },
-                    ].map((s) => (
-                      <div key={s.step} className="flex items-start gap-4">
-                        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-sm text-[#faf9f7]" style={{ backgroundColor: s.color }}>
-                          {s.step}
-                        </div>
-                        <div>
-                          <p className="font-bold text-[#0B192C] text-sm">{s.title}</p>
-                          <p className="text-xs text-[#64748B]">{s.desc}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="bg-[#F3F0EA] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
-                  <p className="text-xs font-bold text-[#94A3B8] mb-3">SUPPORTED CONDITIONS</p>
-                  <div className="flex flex-wrap gap-2">
-                    {["Knee Surgery", "Heart Surgery", "Cancer Care", "Diabetes Management", "Maternity", "Physiotherapy", "Eye Surgery", "Neurology"].map((tag) => (
-                      <span key={tag} className="text-xs font-medium bg-[#faf9f7] border border-[rgba(15,23,42,0.08)] text-[#64748B] px-3 py-1.5 rounded-full">{tag}</span>
-                    ))}
-                  </div>
-                </div>
-              </>
+            <p className="font-bold text-[#0B192C]">All updates</p>
+            {notifications.length === 0 && (
+              <div className="bg-[#faf9f7] rounded-2xl p-6 border border-dashed border-[#CBD5E1] text-sm text-[#64748B]">
+                Nothing yet — spoken updates from the Notification Agent will appear here.
+              </div>
             )}
+            {notifications.map((n) => (
+              <div key={n._id} className="bg-[#faf9f7] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full tracking-widest ${n.voiceStatus === "spoken" ? "bg-[#F0FDF4] text-[#16A34A]" : n.voiceStatus === "failed" ? "bg-[#FEF2F2] text-[#FF6B6B]" : "bg-[#FFFBEB] text-[#D97706]"}`}>
+                    {n.voiceStatus === "spoken" ? "SPOKEN" : n.voiceStatus === "failed" ? "VOICE FAILED" : "TEXT ONLY"}
+                  </span>
+                  <span className="text-[11px] text-[#94A3B8] font-mono">{new Date(n.createdAt).toLocaleString("en-IN")}</span>
+                </div>
+                <p className="text-sm text-[#0B192C] mb-3">{n.text}</p>
+                {n.audioUrl && <audio controls src={n.audioUrl} className="w-full" />}
+              </div>
+            ))}
           </div>
         </div>
       </div>
