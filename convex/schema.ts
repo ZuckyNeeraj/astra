@@ -99,6 +99,16 @@ export default defineSchema({
     label: v.string(),                // "Aadhaar" | "Insurance Policy" | ...
     value: v.optional(v.string()),    // redacted / reference text
     storageId: v.optional(v.id("_storage")), // uploaded file, when present
+
+    // ── Health Vault agent: what the parser read out of the uploaded file ──────
+    docKind: v.optional(v.string()),  // "insurance_policy" | "medical_report" | "prescription" | "id" | "other"
+    extractedText: v.optional(v.string()),   // plain text pulled from the PDF/image
+    extractedFields: v.optional(v.record(v.string(), v.string())), // structured, e.g. { insurer, policyNumber, sumInsured }
+    extractedSummary: v.optional(v.string()), // one-line human summary for the UI
+    parseStatus: v.optional(
+      v.union(v.literal("pending"), v.literal("parsed"), v.literal("failed")),
+    ),
+    parsedAt: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
   // ── New pipeline tables (Gmail → report → treatment → payments) ─────────────

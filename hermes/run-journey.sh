@@ -48,6 +48,15 @@ Do: (1) run agentTools:patchJourney {journeyId:'$JID', stage:'Insurance Pre-Auth
 (2) run agentTools:logStep {journeyId:'$JID', agentName:'Planner Agent', message:'<one-line plan for this patient's journey>', kind:'info', tokens:<~180>, costUsd:<~0.001>};
 (3) run agentTools:setAgent {journeyId:'$JID', name:'Planner Agent', status:'done', progress:100}."
 
+echo "▶ Health Vault Agent…"
+runagent "$HDR
+You are the Health Vault Agent for journeyId $JID (patient $PATIENT, $COND). You read the REAL documents the family uploaded and surface the facts the other agents need.
+Do: (1) run agentTools:setAgent {journeyId:'$JID', name:'Health Vault Agent', status:'working', progress:40};
+(2) run agentTools:readVaultDocuments {journeyId:'$JID'} and read each document's docKind, summary and fields (e.g. the insurance policy's insurer/sumInsuredInr, the medical report's diagnosis);
+(3) for the MOST important 1-2 documents, run agentTools:logStep {journeyId:'$JID', agentName:'Health Vault Agent', message:'<what you read from that real document — cite the actual insurer, sum insured, or diagnosis>', kind:'success', tokens:<~400>, costUsd:<~0.002>};
+(4) if a policy was read, run agentTools:patchJourney {journeyId:'$JID', coverageLeftInr:<the real sumInsuredInr you read, as a number>};
+(5) run agentTools:setAgent {journeyId:'$JID', name:'Health Vault Agent', status:'done', progress:100}."
+
 echo "▶ Hospital Agent (Linkup)…"
 runagent "$HDR
 You are the Hospital Agent for journeyId $JID. Procedure: $PROC, city Mumbai.

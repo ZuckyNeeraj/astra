@@ -86,10 +86,11 @@ export const startJourneyFromPlan = mutation({
     });
 
     const agents = [
-      { name: "Planner Agent",   role: "Journey Orchestrator", status: "working" as const, progress: 10 },
-      { name: "Insurance Agent", role: "Coverage Specialist",  status: "pending" as const, progress: 0 },
-      { name: "Hospital Agent",  role: "Facility Coordinator", status: "pending" as const, progress: 0 },
-      { name: "Document Agent",  role: "Records Manager",      status: "pending" as const, progress: 0 },
+      { name: "Planner Agent",      role: "Journey Orchestrator", status: "working" as const, progress: 10 },
+      { name: "Health Vault Agent", role: "Records Analyst",      status: "pending" as const, progress: 0 },
+      { name: "Insurance Agent",    role: "Coverage Specialist",  status: "pending" as const, progress: 0 },
+      { name: "Hospital Agent",     role: "Facility Coordinator", status: "pending" as const, progress: 0 },
+      { name: "Document Agent",     role: "Records Manager",      status: "pending" as const, progress: 0 },
     ];
     for (const a of agents) await ctx.db.insert("agents", { journeyId, ...a });
 
@@ -200,11 +201,14 @@ export const addApproval = mutation({
 });
 
 // ── readVault — which required documents the user has / is missing ───────────
+// Now also returns what the Health Vault agent read out of each present file
+// (docKind + the key extracted fields), so the orchestrator reasons over the
+// REAL policy / report instead of just "a file exists".
 export const readVault = query({
   args: { journeyId: v.id("journeys") },
   handler: async (ctx, { journeyId }) => {
     const journey = await ctx.db.get(journeyId);
-    if (!journey) return { present: [], missing: REQUIRED_LABELS };
+    if (!journey) return { present: [], missing: REQUIRED_LABELS, documents: [] };
     const items = await ctx.db
       .query("vaultItems")
       .withIndex("by_user", (q) => q.eq("userId", journey.userId))
@@ -213,6 +217,41 @@ export const readVault = query({
     return {
       present: REQUIRED_LABELS.filter((l) => labels.has(l)),
       missing: REQUIRED_LABELS.filter((l) => !labels.has(l)),
+      documents: items.map((i) => ({
+        label: i.label,
+        category: i.category,
+        docKind: i.docKind ?? null,
+        parseStatus: i.parseStatus ?? "pending",
+        summary: i.extractedSummary ?? null,
+        fields: i.extractedFields ?? {},
+      })),
+    };
+  },
+});
+
+// ── readVaultDocuments — full parsed contents of a user's vault ───────────────
+// The Health Vault agent's read tool: hands the orchestrator the actual text +
+// structured fields extracted from every uploaded document. Takes a journeyId
+// (to resolve the owner) so it stays consistent with the other agent tools.
+export const readVaultDocuments = query({
+  args: { journeyId: v.id("journeys") },
+  handler: async (ctx, { journeyId }) => {
+    const journey = await ctx.db.get(journeyId);
+    if (!journey) return { documents: [] };
+    const items = await ctx.db
+      .query("vaultItems")
+      .withIndex("by_user", (q) => q.eq("userId", journey.userId))
+      .collect();
+    return {
+      documents: items.map((i) => ({
+        label: i.label,
+        category: i.category,
+        docKind: i.docKind ?? null,
+        parseStatus: i.parseStatus ?? "pending",
+        summary: i.extractedSummary ?? null,
+        fields: i.extractedFields ?? {},
+        text: i.extractedText ?? null,
+      })),
     };
   },
 });

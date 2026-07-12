@@ -1,4 +1,5 @@
 import { query, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
@@ -54,10 +55,30 @@ export const save = mutation({
 
     if (match) {
       if (match.storageId) await ctx.storage.delete(match.storageId); // drop old file
-      await ctx.db.patch(match._id, { category, storageId });
+      // New file replaces the old one → clear the stale parse and re-read it.
+      await ctx.db.patch(match._id, {
+        category,
+        storageId,
+        docKind: undefined,
+        extractedText: undefined,
+        extractedFields: undefined,
+        extractedSummary: undefined,
+        parseStatus: "pending",
+        parsedAt: undefined,
+      });
+      await ctx.scheduler.runAfter(0, internal.vaultAgent.parseVaultItem, { itemId: match._id });
       return match._id;
     }
-    return await ctx.db.insert("vaultItems", { userId, category, label, storageId });
+    const id = await ctx.db.insert("vaultItems", {
+      userId,
+      category,
+      label,
+      storageId,
+      parseStatus: "pending",
+    });
+    // Hand the uploaded file to the Health Vault agent to read.
+    await ctx.scheduler.runAfter(0, internal.vaultAgent.parseVaultItem, { itemId: id });
+    return id;
   },
 });
 

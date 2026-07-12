@@ -1128,12 +1128,81 @@ const REQUIRED_DOCS = [
   { label: "Doctor's Prescription", type: "Prescription",  category: "medical",   icon: Stethoscope, color: "#F59E0B" },
 ];
 
+// Pretty labels for what the Health Vault agent classified a document as.
+const DOC_KIND_LABEL: Record<string, string> = {
+  insurance_policy: "Insurance policy",
+  medical_report: "Medical report",
+  prescription: "Prescription",
+  id: "Government ID",
+  other: "Document",
+};
+
+// The Health Vault agent's read-out for one uploaded file: a status chip, the
+// one-line summary, and a couple of the key fields it extracted.
+function ParseReadout({ item }: { item: any }) {
+  const status: string = item.parseStatus ?? (item.storageId ? "pending" : "none");
+  if (status === "none") return null;
+
+  if (status === "pending") {
+    return (
+      <div className="mt-3 pt-3 border-t border-[rgba(15,23,42,0.06)] flex items-center gap-1.5 text-[11px] text-[#64748B]">
+        <RefreshCw size={11} className="animate-spin text-[#0EA5E9]" /> Health Vault agent is reading this…
+      </div>
+    );
+  }
+  if (status === "failed") {
+    return (
+      <div className="mt-3 pt-3 border-t border-[rgba(15,23,42,0.06)] flex items-center gap-1.5 text-[11px] text-[#EF4444]">
+        <AlertCircle size={11} /> Couldn't read this automatically
+      </div>
+    );
+  }
+
+  // parsed
+  const fields: Record<string, string> = item.extractedFields ?? {};
+  const shown = Object.entries(fields).slice(0, 4);
+  return (
+    <div className="mt-3 pt-3 border-t border-[rgba(15,23,42,0.06)] flex flex-col gap-2">
+      <div className="flex items-center gap-1.5">
+        <span className="text-[9px] font-black bg-[#DCFCE7] text-[#16A34A] px-2 py-0.5 rounded-full tracking-widest">READ</span>
+        {item.docKind && (
+          <span className="text-[10px] font-bold text-[#0EA5E9]">{DOC_KIND_LABEL[item.docKind] ?? "Document"}</span>
+        )}
+      </div>
+      {item.extractedSummary && (
+        <p className="text-[11px] text-[#475569] leading-snug">{item.extractedSummary}</p>
+      )}
+      {shown.length > 0 && (
+        <div className="flex flex-col gap-0.5">
+          {shown.map(([k, val]) => (
+            <div key={k} className="flex gap-1.5 text-[10px]">
+              <span className="text-[#94A3B8] capitalize font-mono">{k.replace(/([A-Z])/g, " $1").trim()}:</span>
+              <span className="text-[#334155] font-semibold truncate">{val}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function VaultScreen() {
   const items = useQuery(api.vault.list);
   const generateUploadUrl = useMutation(api.vault.generateUploadUrl);
   const save = useMutation(api.vault.save);
   const remove = useMutation(api.vault.remove);
+  const parseVault = useAction(api.vaultAgent.parseMyVault);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [reparsing, setReparsing] = useState(false);
+
+  async function reparseAll() {
+    setReparsing(true);
+    try {
+      await parseVault({ force: true });
+    } finally {
+      setReparsing(false);
+    }
+  }
 
   const byLabel = new Map((items ?? []).map((i) => [i.label, i] as const));
   const uploadedCount = REQUIRED_DOCS.filter((d) => byLabel.has(d.label)).length;
@@ -1155,6 +1224,23 @@ function VaultScreen() {
     <>
       <TopBar title="Document Vault" subtitle={`${uploadedCount} of ${REQUIRED_DOCS.length} required documents uploaded`} />
       <div className="p-8 flex flex-col gap-6">
+        {/* Health Vault agent toolbar */}
+        <div className="flex items-center justify-between bg-white rounded-2xl px-5 py-3.5 border border-[rgba(15,23,42,0.06)]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-[#EFF6FF] flex items-center justify-center">
+              <Bot size={16} className="text-[#0EA5E9]" />
+            </div>
+            <div>
+              <p className="font-bold text-[#0F172A] text-sm">Health Vault Agent</p>
+              <p className="text-[11px] text-[#64748B]">Reads every uploaded file and extracts the key facts</p>
+            </div>
+          </div>
+          <button onClick={() => void reparseAll()} disabled={reparsing}
+            className="flex items-center gap-1.5 text-[12px] font-bold px-3.5 py-2 rounded-lg bg-[#F1F5F9] text-[#334155] hover:bg-[#E2E8F0] transition disabled:opacity-60">
+            <RefreshCw size={12} className={reparsing ? "animate-spin" : ""} /> {reparsing ? "Reading…" : "Re-read all"}
+          </button>
+        </div>
+
         {/* Required documents */}
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
           {REQUIRED_DOCS.map((doc) => {
@@ -1192,6 +1278,7 @@ function VaultScreen() {
                       onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, doc); e.target.value = ""; }} />
                   </label>
                 </div>
+                {item && <ParseReadout item={item} />}
               </div>
             );
           })}
@@ -1221,6 +1308,7 @@ function VaultScreen() {
                   </div>
                   <p className="font-bold text-[#0F172A] text-sm mb-0.5 truncate">{item.label}</p>
                   <p className="text-xs text-[#64748B] capitalize">{item.category}</p>
+                  <ParseReadout item={item} />
                 </div>
               ))}
             </div>
