@@ -342,6 +342,32 @@ export const getUserLocation = query({
   },
 });
 
+// ── getPolicyForJourney — the journey owner's REAL parsed insurance policy ────
+// Flat fields so the Insurance Agent can decide coverage against the actual
+// policy the user uploaded (not a generic one).
+export const getPolicyForJourney = query({
+  args: { journeyId: v.id("journeys") },
+  handler: async (ctx, { journeyId }) => {
+    const journey = await ctx.db.get(journeyId);
+    if (!journey) return { found: false };
+    const items = await ctx.db
+      .query("vaultItems")
+      .withIndex("by_user", (q) => q.eq("userId", journey.userId))
+      .collect();
+    const policy = items.find((i) => i.docKind === "insurance_policy");
+    const f = policy?.extractedFields ?? {};
+    return {
+      found: !!policy,
+      insurer: f.insurer ?? null,
+      policyNumber: f.policyNumber ?? null,
+      sumInsuredInr: f.sumInsuredInr ?? null,
+      coPay: f.coPay ?? null,
+      roomRentCap: f.roomRentCap ?? null,
+      validTill: f.validTill ?? null,
+    };
+  },
+});
+
 // ── addHospitalOption — record ONE real hospital the Hospital Agent found ──────
 // Upserts by (journeyId, name) so re-running the agent doesn't duplicate rows.
 export const addHospitalOption = mutation({

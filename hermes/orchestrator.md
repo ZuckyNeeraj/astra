@@ -50,6 +50,8 @@ report that one error and stop; otherwise keep executing.
   `{ ok, answer, sources }`. If `ok` is false, use your own knowledge and note it.
 - `agentTools:getUserLocation` `{ journeyId }` → `{ city, region, country, lat, lng }` — the
   patient's real current location. Use its `city` for the hospital search.
+- `agentTools:getPolicyForJourney` `{ journeyId }` → `{ found, insurer, policyNumber, sumInsuredInr,
+  coPay, roomRentCap, validTill }` — the patient's REAL parsed policy for the coverage decision.
 - `agentTools:addHospitalOption` `{ journeyId, name, area?, estCostInr?, coverageNote?, rating?,
   distanceKm?, why?, source?, recommended? }` — record one real hospital (fills the Hospitals screen).
 - `agentTools:addHospitalOptions` `{ journeyId, hospitals: [ {name, area?, estCostInr?, coverageNote?,
@@ -84,9 +86,11 @@ STEP 3. Run the specialists IN ORDER. For each: `setAgent` working → do the wo
   each with `addHospitalOption { journeyId, name, area, estCostInr, coverageNote, why, source,
   recommended }` (recommended:true for the single best). Then one `logStep` summary.
 
-  **Insurance Agent** — reason about likely coverage for <recommendedProcedure> (est ₹<estCostInr>)
-  under a typical Indian health policy; `logStep` a coverage verdict (kind "success");
-  `patchJourney { coverageLeftInr: <plausible number> }`; `addApproval { title: "Confirm pre-authorization", detail: … }`.
+  **Insurance Agent** — `getPolicyForJourney { journeyId }` to read the patient's REAL uploaded
+  policy (insurer, sum insured, co-pay, room-rent cap). Decide under THAT policy whether
+  <recommendedProcedure> is covered, the approved amount (capped at sum insured), the family's
+  co-pay/out-of-pocket, and if pre-auth is needed. `logStep` a verdict citing the real numbers
+  (kind "success"); `addApproval { title: "Confirm pre-authorization", detail: … }`.
 
   **Document Agent** — `readVault { journeyId }`; `logStep` which required docs are present vs
   missing; `patchJourney { documentsReady: <present count> }`; if any missing,

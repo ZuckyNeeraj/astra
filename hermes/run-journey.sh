@@ -79,15 +79,23 @@ Do: (1) run agentTools:setAgent {journeyId:'$JID', name:'Hospital Agent', status
 (4) run agentTools:logStep {journeyId:'$JID', agentName:'Hospital Agent', message:'Found 3 hospitals near ${CITY:-the patient} for $PROC', kind:'success', tokens:<~700>, costUsd:<~0.0035>};
 (5) run agentTools:setAgent {journeyId:'$JID', name:'Hospital Agent', status:'done', progress:100}."
 
-echo "▶ Insurance Agent…"
+# Fetch the patient's REAL uploaded policy (parsed by the Health Vault agent) so
+# the Insurance Agent checks THIS policy, not a generic one.
+POL="$(npx convex run agentTools:getPolicyForJourney "{\"journeyId\":\"$JID\"}" 2>/dev/null)"
+P_INS="$(printf '%s' "$POL"  | grep -o '"insurer": *"[^"]*"'       | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"
+P_SUM="$(printf '%s' "$POL"  | grep -o '"sumInsuredInr": *"[^"]*"' | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"
+P_COPAY="$(printf '%s' "$POL"| grep -o '"coPay": *"[^"]*"'         | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"
+P_ROOM="$(printf '%s' "$POL" | grep -o '"roomRentCap": *"[^"]*"'   | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"
+if [ -n "$P_INS" ]; then POLICY_DESC="Insurer: $P_INS. Sum Insured: INR ${P_SUM:-unknown}. Co-pay: ${P_COPAY:-none stated}. Room rent: ${P_ROOM:-no sub-limit stated}."; else POLICY_DESC="No uploaded policy found — reason about a typical Indian corporate health policy and SAY that no policy was on file."; fi
+echo "▶ Insurance Agent… (policy: ${P_INS:-none on file})"
 runagent "$HDR
-You are the Insurance Agent for journeyId $JID. Procedure $PROC, estimated cost ₹${COST:-250000}.
-Reason about likely coverage under a typical Indian health policy.
+You are the Insurance Agent for journeyId $JID. Procedure: $PROC. Estimated hospital cost: INR ${COST:-250000}.
+The patient's ACTUAL insurance policy on file: $POLICY_DESC
+Decide, UNDER THIS SPECIFIC POLICY: (a) is $PROC covered (not an exclusion, within sum insured), (b) the approved claim amount (capped at the sum insured), (c) the co-pay / out-of-pocket the family pays, (d) whether pre-authorization is required.
 Do: (1) run agentTools:setAgent {journeyId:'$JID', name:'Insurance Agent', status:'working', progress:50};
-(2) run agentTools:logStep {journeyId:'$JID', agentName:'Insurance Agent', message:'<coverage verdict with numbers>', kind:'success', tokens:<~500>, costUsd:<~0.0025>};
-(3) run agentTools:patchJourney {journeyId:'$JID', coverageLeftInr:<plausible remaining cover>};
-(4) run agentTools:addApproval {journeyId:'$JID', title:'Confirm pre-authorization', detail:'<detail>'};
-(5) run agentTools:setAgent {journeyId:'$JID', name:'Insurance Agent', status:'done', progress:100}."
+(2) run agentTools:logStep {journeyId:'$JID', agentName:'Insurance Agent', message:'<verdict citing the REAL policy: insurer, sum insured, co-pay, approved amount, and out-of-pocket in INR>', kind:'success', tokens:<~600>, costUsd:<~0.003>};
+(3) run agentTools:addApproval {journeyId:'$JID', title:'Confirm pre-authorization', detail:'<insurer, procedure, approved amount, family out-of-pocket, and that pre-auth will be filed>'};
+(4) run agentTools:setAgent {journeyId:'$JID', name:'Insurance Agent', status:'done', progress:100}."
 
 echo "▶ Document Agent…"
 runagent "$HDR
