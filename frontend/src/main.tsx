@@ -3,7 +3,7 @@ import { ConvexReactClient, Authenticated, Unauthenticated, AuthLoading } from "
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import App from "./app/App.tsx";
 import { ConvexStatus } from "./app/components/ConvexStatus.tsx";
-import { SignIn } from "./app/components/SignIn.tsx";
+import { LandingPage } from "./app/components/LandingPage.tsx";
 import "./styles/index.css";
 
 // Connect to the shared Convex deployment (URL from frontend/.env.local).
@@ -17,7 +17,7 @@ createRoot(document.getElementById("root")!).render(
       </div>
     </AuthLoading>
     <Unauthenticated>
-      <SignIn />
+      <LandingPage />
     </Unauthenticated>
     <Authenticated>
       <App />
