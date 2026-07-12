@@ -34,6 +34,7 @@ PROC="$(printf '%s' "$TARGET"   | grep -o '"recommendedProcedure": *"[^"]*"' | h
 PATIENT="$(printf '%s' "$TARGET"| grep -o '"patientName": *"[^"]*"'          | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"
 COND="$(printf '%s' "$TARGET"   | grep -o '"condition": *"[^"]*"'            | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"
 COST="$(printf '%s' "$TARGET"   | grep -o '"estCostInr": *[0-9]*'            | head -1 | grep -o '[0-9]*')"
+AGE="$(printf '%s' "$TARGET"    | grep -o '"patientAge": *[0-9]*'           | head -1 | grep -o '[0-9]*')"
 
 if [ "$MODE" = "start" ]; then
   PLANID="$(printf '%s' "$TARGET" | grep -o '"planId": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
@@ -89,9 +90,10 @@ P_ROOM="$(printf '%s' "$POL" | grep -o '"roomRentCap": *"[^"]*"'   | head -1 | s
 if [ -n "$P_INS" ]; then POLICY_DESC="Insurer: $P_INS. Sum Insured: INR ${P_SUM:-unknown}. Co-pay: ${P_COPAY:-none stated}. Room rent: ${P_ROOM:-no sub-limit stated}."; else POLICY_DESC="No uploaded policy found — reason about a typical Indian corporate health policy and SAY that no policy was on file."; fi
 echo "▶ Insurance Agent… (policy: ${P_INS:-none on file})"
 runagent "$HDR
-You are the Insurance Agent for journeyId $JID. Procedure: $PROC. Estimated hospital cost: INR ${COST:-250000}.
+You are the Insurance Agent for journeyId $JID. Patient age: ${AGE:-unknown}. Procedure: $PROC. Estimated hospital cost: INR ${COST:-250000}.
 The patient's ACTUAL insurance policy on file: $POLICY_DESC
 Decide, UNDER THIS SPECIFIC POLICY: (a) is $PROC covered (not an exclusion, within sum insured), (b) the approved claim amount (capped at the sum insured), (c) the co-pay / out-of-pocket the family pays, (d) whether pre-authorization is required.
+CO-PAY RULE — apply the policy's co-pay ONLY if it actually applies to THIS patient. If the co-pay is conditioned on age (e.g. 'X% for members above 60'), and the patient (age ${AGE:-unknown}) does NOT meet that condition, then NO co-pay applies and the family out-of-pocket is INR 0 with the full amount approved. Do not apply an age-gated co-pay to a patient outside that age band.
 Do: (1) run agentTools:setAgent {journeyId:'$JID', name:'Insurance Agent', status:'working', progress:50};
 (2) run agentTools:logStep {journeyId:'$JID', agentName:'Insurance Agent', message:'<verdict citing the REAL policy: insurer, sum insured, co-pay, approved amount, and out-of-pocket in INR>', kind:'success', tokens:<~600>, costUsd:<~0.003>};
 (3) run agentTools:addApproval {journeyId:'$JID', title:'Confirm pre-authorization', detail:'<insurer, procedure, approved amount, family out-of-pocket, and that pre-auth will be filed>'};

@@ -89,8 +89,9 @@ STEP 3. Run the specialists IN ORDER. For each: `setAgent` working → do the wo
   **Insurance Agent** — `getPolicyForJourney { journeyId }` to read the patient's REAL uploaded
   policy (insurer, sum insured, co-pay, room-rent cap). Decide under THAT policy whether
   <recommendedProcedure> is covered, the approved amount (capped at sum insured), the family's
-  co-pay/out-of-pocket, and if pre-auth is needed. `logStep` a verdict citing the real numbers
-  (kind "success"); `addApproval { title: "Confirm pre-authorization", detail: … }`.
+  co-pay/out-of-pocket, and if pre-auth is needed. Apply an age-gated co-pay ONLY if the patient's
+  age meets it (a "10% above 60" co-pay does NOT apply to a 28-year-old → out-of-pocket ₹0).
+  `logStep` a verdict citing the real numbers (kind "success"); `addApproval { title: "Confirm pre-authorization", detail: … }`.
 
   **Document Agent** — `readVault { journeyId }`; `logStep` which required docs are present vs
   missing; `patchJourney { documentsReady: <present count> }`; if any missing,

@@ -67,7 +67,8 @@ export const orchestrationTarget = query({
       return {
         mode: "start", planId: proposed._id, journeyId: null,
         recommendedProcedure: proposed.recommendedProcedure, estCostInr: proposed.estCostInr ?? null,
-        patientName: report?.patientName ?? "Patient", condition: report?.condition ?? "See report",
+        patientName: report?.patientName ?? "Patient", patientAge: report?.patientAge ?? null,
+        condition: report?.condition ?? "See report",
       };
     }
     // 2) An active journey with specialists still pending → continue it.
@@ -83,11 +84,11 @@ export const orchestrationTarget = query({
           mode: "continue", planId: null, journeyId: j._id,
           recommendedProcedure: plan?.recommendedProcedure ?? j.title,
           estCostInr: plan?.estCostInr ?? null,
-          patientName: j.patientName, condition: j.condition,
+          patientName: j.patientName, patientAge: j.patientAge ?? null, condition: j.condition,
         };
       }
     }
-    return { mode: "none", planId: null, journeyId: null, recommendedProcedure: null, estCostInr: null, patientName: null, condition: null };
+    return { mode: "none", planId: null, journeyId: null, recommendedProcedure: null, estCostInr: null, patientName: null, patientAge: null, condition: null };
   },
 });
 
