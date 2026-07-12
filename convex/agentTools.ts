@@ -434,6 +434,42 @@ export const fileClaim = action({
   },
 });
 
+// ── addHospitalOptions — record SEVERAL hospitals in one call (batch) ─────────
+// Lets the Hospital Agent write all its picks in a single tool call, so a turn
+// with a limited tool-call budget still records every hospital.
+export const addHospitalOptions = mutation({
+  args: {
+    journeyId: v.id("journeys"),
+    hospitals: v.array(
+      v.object({
+        name: v.string(),
+        area: v.optional(v.string()),
+        estCostInr: v.optional(v.number()),
+        coverageNote: v.optional(v.string()),
+        rating: v.optional(v.number()),
+        distanceKm: v.optional(v.number()),
+        why: v.optional(v.string()),
+        source: v.optional(v.string()),
+        recommended: v.optional(v.boolean()),
+      }),
+    ),
+  },
+  handler: async (ctx, { journeyId, hospitals }) => {
+    const existing = await ctx.db
+      .query("hospitals")
+      .withIndex("by_journey", (q) => q.eq("journeyId", journeyId))
+      .collect();
+    let n = 0;
+    for (const h of hospitals) {
+      const match = existing.find((e) => e.name.toLowerCase() === h.name.toLowerCase());
+      if (match) await ctx.db.patch(match._id, h);
+      else await ctx.db.insert("hospitals", { journeyId, ...h, createdAt: Date.now() });
+      n++;
+    }
+    return n;
+  },
+});
+
 // ── linkupHospitalSearch — real web search for hospitals + cost (Linkup) ──────
 // Returns Linkup's sourced answer for Hermes to reason over. Deterministic tool:
 // no LLM here. Falls back to { ok:false, reason } if the key/credits are missing

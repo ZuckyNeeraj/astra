@@ -67,7 +67,7 @@ runagent "$HDR
 You are the Hospital Agent for journeyId $JID. Procedure: $PROC. The patient's current city is: ${CITY:-unknown (search India-wide)}.
 Do: (1) run agentTools:setAgent {journeyId:'$JID', name:'Hospital Agent', status:'working', progress:40};
 (2) run agentTools:linkupHospitalSearch {procedure:'$PROC'$( [ -n "$CITY" ] && printf ", city:'%s'" "$CITY")};
-(3) from the result pick the 3 best hospitals. For EACH, run agentTools:addHospitalOption {journeyId:'$JID', name:'<hospital>', area:'<locality>', estCostInr:<number>, coverageNote:'<one line>', why:'<why this one>', source:'<a source url from the result>', recommended:<true for the single best, else false>};
+(3) from the result pick the 3 best hospitals and record them ALL in ONE call: run agentTools:addHospitalOptions {journeyId:'$JID', hospitals:[{name:'<h1>', area:'<locality>', estCostInr:<number>, coverageNote:'<one line>', why:'<why>', source:'<url>', recommended:true}, {name:'<h2>', area:'<locality>', estCostInr:<number>, coverageNote:'<one line>', why:'<why>', source:'<url>', recommended:false}, {name:'<h3>', area:'<locality>', estCostInr:<number>, coverageNote:'<one line>', why:'<why>', source:'<url>', recommended:false}]};
 (4) run agentTools:logStep {journeyId:'$JID', agentName:'Hospital Agent', message:'Found 3 hospitals near ${CITY:-the patient} for $PROC', kind:'success', tokens:<~700>, costUsd:<~0.0035>};
 (5) run agentTools:setAgent {journeyId:'$JID', name:'Hospital Agent', status:'done', progress:100}."
 

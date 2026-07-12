@@ -48,6 +48,8 @@ report that one error and stop; otherwise keep executing.
   patient's real current location. Use its `city` for the hospital search.
 - `agentTools:addHospitalOption` `{ journeyId, name, area?, estCostInr?, coverageNote?, rating?,
   distanceKm?, why?, source?, recommended? }` — record one real hospital (fills the Hospitals screen).
+- `agentTools:addHospitalOptions` `{ journeyId, hospitals: [ {name, area?, estCostInr?, coverageNote?,
+  why?, source?, recommended?}, … ] }` — record SEVERAL hospitals in one call (prefer this).
 - `agentTools:fileClaim` `{ journeyId, hospitalName?, amountInr?, insurer?, policyNumber?, summary }`
   → `{ ok, emailStatus, employerPortalRef, reason? }` — really files the claim (email + employer portal).
 - `notify:notifyFamily` `{ journeyId, message }` → `{ ok, voiceStatus, reason? }` — really speaks a
