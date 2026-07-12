@@ -1,0 +1,266 @@
+/* Global dashboard responsiveness ----------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.responsive-shell {
+  min-height: 100dvh;
+}
+
+.responsive-main {
+  min-width: 0;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.micro-button-pad {
+  padding: 0.1875rem 0.125rem;
+}
+
+.app-sidebar {
+  width: 256px;
+  transition: width 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.app-sidebar[data-collapsed="true"] {
+  width: 0;
+  border-right-width: 0;
+  overflow: hidden;
+}
+
+.app-sidebar[data-collapsed="true"] .sidebar-header {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.app-sidebar[data-collapsed="true"] .sidebar-brand-copy,
+.app-sidebar[data-collapsed="true"] .sidebar-logo,
+.app-sidebar[data-collapsed="true"] .sidebar-section-label,
+.app-sidebar[data-collapsed="true"] .sidebar-nav-label,
+.app-sidebar[data-collapsed="true"] .sidebar-nav-badge,
+.app-sidebar[data-collapsed="true"] .sidebar-status-text,
+.app-sidebar[data-collapsed="true"] .sidebar-scan-card,
+.app-sidebar[data-collapsed="true"] .sidebar-journey-card,
+.app-sidebar[data-collapsed="true"] .sidebar-user-card,
+.app-sidebar[data-collapsed="true"] .sidebar-collapse-btn,
+.app-sidebar[data-collapsed="true"] nav {
+  display: none;
+}
+
+.sidebar-toggle-btn {
+  display: inline-flex;
+}
+
+.responsive-sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .responsive-shell {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .responsive-topbar {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .responsive-main {
+    width: 100%;
+  }
+
+  .responsive-main .p-8 {
+    padding: 1rem;
+  }
+
+  .responsive-main .p-6 {
+    padding: 1rem;
+  }
+
+  .responsive-main .p-5 {
+    padding: 0.875rem;
+  }
+
+  .responsive-main .p-14 {
+    padding: 1.5rem 1rem;
+  }
+
+  .responsive-main .grid {
+    min-width: 0;
+  }
+
+  .responsive-main [style*="grid-template-columns: 1fr 380px"],
+  .responsive-main [style*="grid-template-columns: 1fr 360px"],
+  .responsive-main [style*="grid-template-columns: 300px 1fr"],
+  .responsive-main [style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .responsive-main [style*="grid-template-columns: 1fr 1fr 1fr"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .responsive-main [style*="grid-template-columns: repeat(4, 1fr)"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .responsive-main [style*="grid-template-columns: repeat(3, 1fr)"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .responsive-main .rounded-3xl {
+    border-radius: 1.25rem;
+  }
+
+  .responsive-main table {
+    min-width: 44rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    width: min(84vw, 20rem);
+    transform: translateX(-102%);
+    box-shadow: 0 16px 48px rgba(15, 23, 42, 0.14);
+  }
+
+  .app-sidebar[data-collapsed="false"] {
+    width: min(84vw, 20rem);
+    transform: translateX(0);
+  }
+
+  .app-sidebar[data-collapsed="true"] {
+    width: min(84vw, 20rem);
+    border-right-width: 1px;
+    transform: translateX(-102%);
+  }
+
+  .app-sidebar[data-collapsed="true"] .sidebar-brand-copy,
+  .app-sidebar[data-collapsed="true"] .sidebar-logo,
+  .app-sidebar[data-collapsed="true"] .sidebar-section-label,
+  .app-sidebar[data-collapsed="true"] .sidebar-nav-label,
+  .app-sidebar[data-collapsed="true"] .sidebar-nav-badge,
+  .app-sidebar[data-collapsed="true"] .sidebar-status-text,
+  .app-sidebar[data-collapsed="true"] .sidebar-scan-card,
+  .app-sidebar[data-collapsed="true"] .sidebar-journey-card,
+  .app-sidebar[data-collapsed="true"] .sidebar-user-card,
+  .app-sidebar[data-collapsed="true"] .sidebar-collapse-btn,
+  .app-sidebar[data-collapsed="true"] nav {
+    display: revert;
+  }
+
+  .app-sidebar[data-collapsed="true"] .sidebar-header {
+    flex-direction: row;
+    gap: 0.75rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .app-sidebar[data-collapsed="true"] .sidebar-collapse-btn {
+    margin-left: auto;
+    background: transparent;
+  }
+
+  .app-sidebar[data-collapsed="false"] ~ .responsive-sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .responsive-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    border: 0;
+    background: rgba(15, 23, 42, 0.34);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+
+  .responsive-topbar {
+    flex-wrap: nowrap;
+    gap: 0.75rem;
+    padding-top: 0.875rem;
+    padding-bottom: 0.875rem;
+  }
+
+  .responsive-topbar-actions {
+    width: auto;
+    justify-content: flex-end;
+  }
+
+  .responsive-topbar-actions > button:last-child {
+    flex-shrink: 0;
+  }
+
+  .responsive-header-brand {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .responsive-main .p-8,
+  .responsive-main .p-6,
+  .responsive-main .p-5 {
+    padding: 0.875rem;
+  }
+
+  .responsive-main .p-14 {
+    padding: 1.25rem 0.875rem;
+  }
+
+  .responsive-main .gap-8 {
+    gap: 1rem;
+  }
+
+  .responsive-main .gap-6 {
+    gap: 1rem;
+  }
+
+  .responsive-main [style*="grid-template-columns: 1fr 380px"],
+  .responsive-main [style*="grid-template-columns: 1fr 360px"],
+  .responsive-main [style*="grid-template-columns: 300px 1fr"],
+  .responsive-main [style*="grid-template-columns: 1fr 1fr"],
+  .responsive-main [style*="grid-template-columns: 1fr 1fr 1fr"],
+  .responsive-main [style*="grid-template-columns: repeat(4, 1fr)"],
+  .responsive-main [style*="grid-template-columns: repeat(3, 1fr)"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .responsive-main .rounded-3xl {
+    border-radius: 1rem;
+  }
+
+  .responsive-main .sticky.top-0 {
+    top: 0;
+  }
+
+  .responsive-main table {
+    min-width: 40rem;
+  }
+}

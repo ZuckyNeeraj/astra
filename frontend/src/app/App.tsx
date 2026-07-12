@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import {
   Home, Zap, GitBranch, MapPin, Shield, FolderOpen, CheckSquare, Mic,
   Bot, FileText, CreditCard, Building2, Bell, Star, Upload, Check, X,
   AlertCircle, ArrowRight, Stethoscope, CheckCircle2, Timer, RefreshCw,
   ShieldCheck, Receipt, Circle, Eye, Download, ChevronRight, Settings,
-  User, TrendingUp, MoreHorizontal, Calendar, Activity, Menu, LogOut,
-  RotateCcw,
+  User, TrendingUp, MoreHorizontal, Activity, Menu, LogOut,
+  RotateCcw, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -18,7 +18,19 @@ import { api } from "@convex/_generated/api";
 // ── Convex helpers ───────────────────────────────────────────────────────────
 
 const ACTIVITY_KIND_COLOR: Record<string, string> = {
-  info: "#0EA5E9", success: "#16A34A", warning: "#F59E0B", action: "#8B5CF6",
+  info: "#0284C7", success: "#16A34A", warning: "#F59E0B", action: "#FF6B6B",
+};
+
+const SILENT_AI = {
+  progressTeal: "#00E5FF",
+  accentBlue: "#0284C7",
+  slate: "#0B192C",
+  background: "#F3F0EA",
+  card: "#faf9f7",
+  track: "#a7c3e7",
+  coral: "#FF6B6B",
+  statusBg: "#E0FBFD",
+  statusText: "#006064",
 };
 
 function relativeTime(ms: number): string {
@@ -35,36 +47,66 @@ function inr(n: number): string {
   return `₹${n.toLocaleString("en-IN")}`;
 }
 
+function timeGreeting(date = new Date()): string {
+  const hour = date.getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
 type Screen =
   | "home" | "agents" | "timeline" | "hospitals"
   | "insurance" | "vault" | "approvals" | "voice";
 
+const SidebarControlsContext = createContext<{
+  collapsed: boolean;
+  toggle: () => void;
+}>({
+  collapsed: false,
+  toggle: () => {},
+});
+
 // ── Primitives ──────────────────────────────────────────────────────────────
 
-function CircularProgress({ value, size = 96, stroke = 8 }: { value: number; size?: number; stroke?: number }) {
+function CircularProgress({
+  value,
+  size = 96,
+  stroke = 8,
+  trackColor = SILENT_AI.track,
+  color = SILENT_AI.progressTeal,
+}: {
+  value: number;
+  size?: number;
+  stroke?: number;
+  trackColor?: string;
+  color?: string;
+}) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   const offset = circ - (value / 100) * circ;
   return (
     <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
       <defs>
-        <linearGradient id="pgWeb" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#0EA5E9" />
-          <stop offset="100%" stopColor="#14B8A6" />
-        </linearGradient>
+        <filter id="pgGlow" x="-35%" y="-35%" width="170%" height="170%">
+          <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+          <feMerge>
+            <feMergeNode in="coloredBlur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
       </defs>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#E2E8F0" strokeWidth={stroke} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={trackColor} strokeWidth={stroke} />
       <circle
         cx={size / 2} cy={size / 2} r={r} fill="none"
-        stroke="url(#pgWeb)" strokeWidth={stroke}
+        stroke={color} strokeWidth={stroke}
         strokeDasharray={circ} strokeDashoffset={offset}
-        strokeLinecap="round" style={{ transition: "stroke-dashoffset 1.2s ease" }}
+        strokeLinecap="round" filter="url(#pgGlow)" style={{ transition: "stroke-dashoffset 1.2s ease" }}
       />
     </svg>
   );
 }
 
-function PulseDot({ color = "#0EA5E9", size = "sm" }: { color?: string; size?: "sm" | "md" }) {
+function PulseDot({ color = "#0284C7", size = "sm" }: { color?: string; size?: "sm" | "md" }) {
   const dim = size === "md" ? "h-3 w-3" : "h-2 w-2";
   return (
     <span className={`relative flex flex-shrink-0 ${dim}`}>
@@ -76,14 +118,14 @@ function PulseDot({ color = "#0EA5E9", size = "sm" }: { color?: string; size?: "
 
 function StatusBadge({ status }: { status: "working" | "waiting" | "done" | "pending" }) {
   const c = {
-    working: { label: "Working",  bg: "#EFF6FF", text: "#0EA5E9" },
+    working: { label: "Working",  bg: SILENT_AI.statusBg, text: SILENT_AI.statusText },
     waiting: { label: "Waiting",  bg: "#FFFBEB", text: "#D97706" },
     done:    { label: "Done",     bg: "#F0FDF4", text: "#16A34A" },
-    pending: { label: "Pending",  bg: "#F8FAFF", text: "#64748B" },
+    pending: { label: "Pending",  bg: "#F3F0EA", text: "#64748B" },
   }[status];
   return (
-    <span className="text-[10px] font-bold px-2.5 py-1 rounded-full tracking-wider" style={{ backgroundColor: c.bg, color: c.text }}>
-      {c.label.toUpperCase()}
+    <span className="text-xs font-medium px-3 py-1 rounded-full" style={{ backgroundColor: c.bg, color: c.text }}>
+      {c.label}
     </span>
   );
 }
@@ -92,7 +134,7 @@ function SectionHeader({ title, subtitle, action }: { title: string; subtitle?: 
   return (
     <div className="flex items-center justify-between mb-6">
       <div>
-        <h2 style={{ fontFamily: "'Outfit', sans-serif" }} className="text-2xl font-bold text-[#0F172A] tracking-tight">{title}</h2>
+        <h2 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-2xl font-medium text-[#0B192C]">{title}</h2>
         {subtitle && <p className="text-sm text-[#64748B] mt-0.5">{subtitle}</p>}
       </div>
       {action}
@@ -113,7 +155,17 @@ const NAV_ITEMS = [
   { id: "voice"     as Screen, icon: Mic,         label: "Voice Command",      group: "tools"    },
 ];
 
-function Sidebar({ screen, onNavigate }: { screen: Screen; onNavigate: (s: Screen) => void }) {
+function Sidebar({
+  screen,
+  onNavigate,
+  collapsed,
+  onToggle,
+}: {
+  screen: Screen;
+  onNavigate: (s: Screen) => void;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
   const groups = [
     { key: "main",    label: "OVERVIEW"       },
     { key: "journey", label: "ACTIVE JOURNEY" },
@@ -121,19 +173,32 @@ function Sidebar({ screen, onNavigate }: { screen: Screen; onNavigate: (s: Scree
   ];
 
   return (
-    <aside className="h-screen flex flex-col bg-white border-r border-[rgba(15,23,42,0.07)] overflow-y-auto flex-shrink-0" style={{ width: 256 }}>
-      {/* Logo */}
-      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-[rgba(15,23,42,0.06)]">
-        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg,#0EA5E9,#14B8A6)" }}>
-          <span className="text-white font-black text-sm" style={{ fontFamily: "'Outfit', sans-serif" }}>A</span>
+    <aside
+      className="app-sidebar h-screen flex flex-col bg-[#faf9f7] border-r border-[rgba(15,23,42,0.07)] overflow-y-auto flex-shrink-0"
+      data-collapsed={collapsed}
+    >
+      {/* Brand */}
+      <div className="sidebar-header flex items-center gap-3 px-4 py-4 border-b border-[rgba(15,23,42,0.06)]">
+        <div className="sidebar-logo w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: "#0B192C" }}>
+          <span className="text-[#faf9f7] font-bold text-base" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>A</span>
         </div>
-        <div>
-          <span className="font-black text-[#0F172A] text-lg tracking-tight" style={{ fontFamily: "'Outfit', sans-serif" }}>astra</span>
-          <div className="flex items-center gap-1.5 mt-0">
+        <div className="sidebar-brand-copy min-w-0">
+          <span className="sidebar-brand-text block font-bold text-[#0B192C] text-lg" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>astra</span>
+          <div className="flex items-center gap-1.5 mt-1">
             <PulseDot size="sm" />
-            <span className="text-[10px] text-[#64748B] font-semibold">4 agents active</span>
+            <span className="sidebar-status-text text-sm text-[#64748B] font-medium">4 agents active</span>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="sidebar-collapse-btn ml-auto inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-[rgba(15,23,42,0.08)] bg-[#faf9f7] text-[#0B192C] hover:bg-[#F3F0EA] transition"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-pressed={collapsed}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+        </button>
       </div>
 
       {/* Navigation */}
@@ -142,7 +207,7 @@ function Sidebar({ screen, onNavigate }: { screen: Screen; onNavigate: (s: Scree
           const items = NAV_ITEMS.filter((n) => n.group === g.key);
           return (
             <div key={g.key}>
-              <p className="text-[10px] font-black text-[#94A3B8] tracking-widest px-2 mb-2">{g.label}</p>
+              <p className="sidebar-section-label text-sm font-bold text-[#94A3B8] px-2 mb-2">{g.label}</p>
               <div className="flex flex-col gap-0.5">
                 {items.map((item) => {
                   const active = screen === item.id;
@@ -150,16 +215,16 @@ function Sidebar({ screen, onNavigate }: { screen: Screen; onNavigate: (s: Scree
                     <button
                       key={item.id}
                       onClick={() => onNavigate(item.id)}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left w-full ${
+                      className={`sidebar-nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left w-full ${
                         active
-                          ? "bg-[#EFF6FF] text-[#0EA5E9]"
-                          : "text-[#64748B] hover:bg-[#F8FAFF] hover:text-[#0F172A]"
+                          ? "bg-[#E0FBFD] text-[#0284C7]"
+                          : "text-[#64748B] hover:bg-[#F3F0EA] hover:text-[#0B192C]"
                       }`}
                     >
                       <item.icon size={16} strokeWidth={active ? 2.5 : 1.75} />
-                      {item.label}
+                      <span className="sidebar-nav-label">{item.label}</span>
                       {item.id === "approvals" && (
-                        <span className="ml-auto w-5 h-5 bg-[#EF4444] text-white text-[9px] font-black rounded-full flex items-center justify-center">1</span>
+                        <span className="sidebar-nav-badge ml-auto w-5 h-5 bg-[#FF6B6B] text-[#faf9f7] text-sm font-bold rounded-full flex items-center justify-center">1</span>
                       )}
                     </button>
                   );
@@ -170,11 +235,20 @@ function Sidebar({ screen, onNavigate }: { screen: Screen; onNavigate: (s: Scree
         })}
       </nav>
 
+      {/* Inbox tools */}
+      <div className="sidebar-scan-card px-3 pb-3">
+        <ScanInboxButton variant="sidebar" />
+      </div>
+
       {/* Journey widget */}
-      <CurrentJourneyCard />
+      <div className="sidebar-journey-card">
+        <CurrentJourneyCard />
+      </div>
 
       {/* User */}
-      <UserCard />
+      <div className="sidebar-user-card">
+        <UserCard />
+      </div>
     </aside>
   );
 }
@@ -184,15 +258,15 @@ function CurrentJourneyCard() {
   const j = journeys?.[0];
   if (!j) return null;
   return (
-    <div className="mx-3 mb-3 p-4 rounded-2xl bg-[#F8FAFF] border border-[rgba(15,23,42,0.06)]">
-      <p className="text-[10px] font-black text-[#94A3B8] tracking-widest mb-2">CURRENT JOURNEY</p>
-      <p className="font-bold text-[#0F172A] text-sm leading-tight">{j.title}</p>
+    <div className="mx-3 mb-3 p-4 rounded-2xl bg-[#F3F0EA] border border-[rgba(15,23,42,0.06)]">
+      <p className="text-sm font-bold text-[#94A3B8] mb-2">CURRENT JOURNEY</p>
+      <p className="font-bold text-[#0B192C] text-sm">{j.title}</p>
       <p className="text-xs text-[#64748B] mb-3">{j.patientName} · {j.patientAge} yrs</p>
       <div className="flex items-center gap-2">
-        <div className="flex-1 h-1.5 bg-[#E2E8F0] rounded-full overflow-hidden">
-          <div className="h-full rounded-full" style={{ width: `${j.progress}%`, background: "linear-gradient(90deg,#0EA5E9,#14B8A6)" }} />
+        <div className="flex-1 h-1.5 bg-[#a7c3e7] rounded-full overflow-hidden">
+          <div className="h-full rounded-full" style={{ width: `${j.progress}%`, background: "linear-gradient(90deg,#0284C7,#0284C7)" }} />
         </div>
-        <span className="text-[11px] font-black text-[#0EA5E9]" style={{ fontFamily: "'DM Mono', monospace" }}>{j.progress}%</span>
+        <span className="text-sm font-bold text-[#0284C7]" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>{j.progress}%</span>
       </div>
     </div>
   );
@@ -206,17 +280,17 @@ function UserCard() {
 
   return (
     <div className="px-4 py-4 border-t border-[rgba(15,23,42,0.06)] flex items-center gap-3">
-      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#0EA5E9] to-[#14B8A6] flex items-center justify-center flex-shrink-0">
-        <span className="text-white text-xs font-black">{initial}</span>
+      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#0284C7] to-[#0284C7] flex items-center justify-center flex-shrink-0">
+        <span className="text-[#faf9f7] text-xs font-bold">{initial}</span>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-[#0F172A] truncate">{email || "Signed in"}</p>
-        <p className="text-[11px] text-[#94A3B8]">Patient Guardian</p>
+        <p className="text-sm font-medium text-[#0B192C] truncate">{email || "Signed in"}</p>
+        <p className="text-sm text-[#94A3B8]">Patient Guardian</p>
       </div>
       <button
         onClick={() => void signOut()}
         title="Sign out"
-        className="p-1.5 rounded-lg hover:bg-[#F1F5F9] transition"
+        className="p-1.5 rounded-lg hover:bg-[#EEEAE2] transition"
       >
         <LogOut size={14} className="text-[#94A3B8]" />
       </button>
@@ -224,25 +298,151 @@ function UserCard() {
   );
 }
 
-// ── Top bar ─────────────────────────────────────────────────────────────────
+// ── Header ──────────────────────────────────────────────────────────────────
 
-function TopBar({ title, subtitle }: { title: string; subtitle?: string }) {
+function TopBar() {
+  const { collapsed, toggle } = useContext(SidebarControlsContext);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [readNotifications, setReadNotifications] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      return new Set(JSON.parse(window.localStorage.getItem("astra-read-notifications") ?? "[]"));
+    } catch {
+      return new Set();
+    }
+  });
+  const journeys = useQuery(api.journeys.listActive);
+  const journey = journeys?.[0];
+  const bundle = useQuery(api.journeys.get, journey ? { id: journey._id } : "skip");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("astra-read-notifications", JSON.stringify([...readNotifications]));
+  }, [readNotifications]);
+
+  const notificationItems = [
+    ...(bundle?.approvals ?? [])
+      .filter((approval) => approval.status === "pending")
+      .map((approval) => ({
+        id: `approval-${String(approval._id)}`,
+        title: approval.title,
+        detail: "Your approval is needed",
+        tone: "action" as const,
+      })),
+    ...(bundle?.activity ?? [])
+      .slice()
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 4)
+      .map((event) => ({
+        id: `activity-${String(event._id)}`,
+        title: event.message,
+        detail: relativeTime(event.createdAt),
+        tone: event.kind === "action" ? ("action" as const) : ("info" as const),
+      })),
+  ];
+  const unreadCount = notificationItems.filter((item) => !readNotifications.has(item.id)).length;
+  const markRead = (id: string) => setReadNotifications((current) => new Set(current).add(id));
+  const markAllRead = () => setReadNotifications(new Set(notificationItems.map((item) => item.id)));
+
   return (
-    <div className="sticky top-0 z-20 bg-[#F8FAFF]/90 backdrop-blur-xl border-b border-[rgba(15,23,42,0.06)] px-8 py-4 flex items-center justify-between">
-      <div>
-        <h1 style={{ fontFamily: "'Outfit', sans-serif" }} className="text-xl font-bold text-[#0F172A] tracking-tight">{title}</h1>
-        {subtitle && <p className="text-xs text-[#64748B] mt-0">{subtitle}</p>}
-      </div>
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 bg-white border border-[rgba(15,23,42,0.08)] rounded-xl px-3 py-2">
-          <Calendar size={14} className="text-[#64748B]" />
-          <span className="text-xs font-semibold text-[#64748B]">Mon, Jul 7, 2025</span>
-        </div>
-        <button className="relative w-9 h-9 bg-white border border-[rgba(15,23,42,0.08)] rounded-xl flex items-center justify-center hover:bg-[#F1F5F9] transition">
-          <Bell size={16} className="text-[#0F172A]" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#EF4444] rounded-full" />
+    <header className="responsive-topbar sticky top-0 z-20 bg-[#faf9f7] border-b border-[rgba(15,23,42,0.06)] px-8 py-3 flex items-center justify-between gap-4">
+      <div className="flex items-center min-w-0">
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-pressed={!collapsed}
+          className="sidebar-toggle-btn inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-[rgba(15,23,42,0.08)] bg-[#faf9f7] text-[#0B192C] hover:bg-[#F3F0EA] transition"
+        >
+          <Menu size={18} />
         </button>
       </div>
+
+      <div className="responsive-header-brand flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#0284C7" }}>
+          <span className="text-[#faf9f7] font-bold text-sm" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>A</span>
+        </div>
+        <span className="font-bold text-[#0B192C] text-lg" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>
+          astra
+        </span>
+      </div>
+
+      <div className="responsive-topbar-actions relative flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setNotificationsOpen((open) => !open)}
+          aria-label="Open notifications"
+          aria-expanded={notificationsOpen}
+          className="relative w-9 h-9 bg-[#faf9f7] border border-[rgba(15,23,42,0.08)] rounded-xl flex items-center justify-center hover:bg-[#EEEAE2] transition"
+        >
+          <Bell size={16} className="text-[#0B192C]" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1.5 right-1.5 min-w-2 h-2 bg-[#FF6B6B] rounded-full" />
+          )}
+        </button>
+        {notificationsOpen && (
+          <div className="scrollbar-none absolute right-0 top-12 z-40 w-80 max-w-[calc(100vw-2rem)] max-h-[60dvh] overflow-y-auto rounded-2xl border border-[rgba(15,23,42,0.08)] bg-[#faf9f7] shadow-2xl p-3">
+            <div className="flex items-center justify-between gap-3 px-1 pb-2">
+              <div>
+                <p className="text-sm font-medium text-[#0B192C]">Notifications</p>
+                <p className="text-xs text-[#64748B]">{unreadCount ? `${unreadCount} unread` : "All caught up"}</p>
+              </div>
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={markAllRead}
+                  className="text-xs font-medium text-[#0284C7] hover:text-[#0B192C] transition"
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              {notificationItems.length === 0 ? (
+                <div className="rounded-xl bg-[#F3F0EA] px-3 py-4 text-sm text-[#64748B]">
+                  No notifications yet.
+                </div>
+              ) : (
+                notificationItems.map((item) => {
+                  const unread = !readNotifications.has(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => markRead(item.id)}
+                      className={`text-left rounded-xl border px-3 py-3 transition ${
+                        unread
+                          ? "border-[#FF6B6B]/30 bg-[#FFF7F7]"
+                          : "border-[rgba(15,23,42,0.06)] bg-[#F3F0EA]"
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span
+                          className="mt-1.5 h-2 w-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: unread ? (item.tone === "action" ? "#FF6B6B" : "#0284C7") : "#CBD5E1" }}
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-[#0B192C]">{item.title}</span>
+                          <span className="block text-xs text-[#64748B] mt-1">{unread ? item.detail : "Read"}</span>
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </header>
+  );
+}
+
+function PageIntro({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div>
+      <h1 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-2xl font-medium text-[#0B192C]">{title}</h1>
+      {subtitle && <p className="text-sm text-[#64748B] mt-1">{subtitle}</p>}
     </div>
   );
 }
@@ -253,7 +453,7 @@ const STAGE_ORDER = [
   "Doctor Consultation", "Insurance Pre-Auth", "Hospital Booking",
   "Surgery", "Recovery & Rehab", "Claim Filing",
 ];
-const AGENT_COLORS = ["#0EA5E9", "#8B5CF6", "#14B8A6", "#F59E0B", "#16A34A", "#64748B"];
+const AGENT_COLORS = ["#0284C7", "#8B5CF6", "#0284C7", "#F59E0B", "#16A34A", "#64748B"];
 
 function greetingName(me: { name?: string; email?: string } | null | undefined): string {
   const raw = me?.name || me?.email?.split("@")[0] || "";
@@ -268,14 +468,18 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
   const bundle = useQuery(api.journeys.get, journey ? { id: journey._id } : "skip");
 
   const name = greetingName(me);
+  const greeting = timeGreeting();
   const loading = journeys === undefined;
 
   // Still loading this user's journeys.
   if (loading) {
     return (
       <>
-        <TopBar title={`Good morning, ${name}`} />
-        <div className="p-8 text-sm text-[#64748B]">Loading your journey…</div>
+        <TopBar />
+        <div className="p-8 flex flex-col gap-4">
+          <PageIntro title={`${greeting}, ${name}`} />
+          <p className="text-sm text-[#64748B]">Loading your journey…</p>
+        </div>
       </>
     );
   }
@@ -284,21 +488,19 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
   if (!journey) {
     return (
       <>
-        <TopBar title={`Good morning, ${name}`} subtitle="Let's get your healthcare journey started." />
-        <div className="p-8">
-          <div className="bg-white rounded-2xl border border-[rgba(15,23,42,0.06)] p-14 flex flex-col items-center text-center">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: "linear-gradient(135deg,#0EA5E9,#14B8A6)" }}>
-              <Stethoscope size={24} className="text-white" />
+        <TopBar />
+        <div className="p-8 flex flex-col gap-6">
+          <PageIntro title={`${greeting}, ${name}`} subtitle="Let's get your healthcare journey started." />
+          <div className="bg-[#faf9f7] rounded-2xl border border-[rgba(15,23,42,0.06)] p-14 flex flex-col items-center text-center">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: "linear-gradient(135deg,#0284C7,#0284C7)" }}>
+              <Stethoscope size={24} className="text-[#faf9f7]" />
             </div>
-            <h2 className="text-xl font-black text-[#0F172A]" style={{ fontFamily: "'Outfit', sans-serif" }}>No active journey yet</h2>
+            <h2 className="text-xl font-medium text-[#0B192C]" style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }}>No active journey yet</h2>
             <p className="text-sm text-[#64748B] mt-1.5 max-w-md">
               When a health report arrives or you start a journey, Astra's agents begin
               coordinating hospitals, insurance, documents and claims — and it all shows up here.
             </p>
-            <div className="mt-6">
-              <ScanInboxButton />
-            </div>
-            <p className="text-[11px] text-[#94A3B8] mt-3">Simulates a health report arriving in your inbox.</p>
+            <p className="text-sm text-[#94A3B8] mt-3">Use Scan inbox from the sidebar to check for health reports.</p>
           </div>
         </div>
       </>
@@ -316,7 +518,7 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
     .map((a) => ({
       text: a.message,
       time: relativeTime(a.createdAt),
-      color: ACTIVITY_KIND_COLOR[a.kind] ?? "#0EA5E9",
+      color: ACTIVITY_KIND_COLOR[a.kind] ?? "#0284C7",
     }));
 
   const activeIdx = Math.max(0, STAGE_ORDER.indexOf(journey.stage));
@@ -339,33 +541,33 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
 
   return (
     <>
-      <TopBar title={`Good morning, ${name}`} subtitle={`Here's where ${journey.patientName}'s healthcare journey stands today`} />
+      <TopBar />
 
       <div className="p-8 flex flex-col gap-6">
-        <div className="flex justify-end -mb-2">
-          <ScanInboxButton variant="ghost" />
+        <div className="flex items-start justify-between gap-4">
+          <PageIntro title={`${greeting}, ${name}`} subtitle={`Here's where ${journey.patientName}'s healthcare journey stands today`} />
         </div>
         {/* Hero journey card */}
-        <div className="rounded-2xl p-6 text-white relative overflow-hidden" style={{ background: "linear-gradient(135deg,#0284C7 0%,#0EA5E9 40%,#14B8A6 100%)" }}>
+        <div className="rounded-2xl p-6 text-[#faf9f7] relative overflow-hidden" style={{ background: "linear-gradient(135deg,#0B192C 0%,#12304D 58%,#006064 100%)" }}>
           <div className="absolute inset-0 opacity-10">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="absolute rounded-full border border-white" style={{ width: 200 + i * 120, height: 200 + i * 120, top: "50%", right: -60 + i * -40, transform: "translateY(-50%)", opacity: 0.6 - i * 0.1 }} />
+              <div key={i} className="absolute rounded-full border border-[#faf9f7]" style={{ width: 200 + i * 120, height: 200 + i * 120, top: "50%", right: -60 + i * -40, transform: "translateY(-50%)", opacity: 0.6 - i * 0.1 }} />
             ))}
           </div>
           <div className="relative flex items-center justify-between">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-3">
-                <PulseDot color="white" />
-                <span className="text-xs font-black opacity-80 tracking-widest">ACTIVE JOURNEY</span>
+                <PulseDot color="#faf9f7" />
+                <span className="text-xs font-bold opacity-80">ACTIVE JOURNEY</span>
               </div>
-              <h2 style={{ fontFamily: "'Outfit', sans-serif" }} className="text-3xl font-black tracking-tight mb-1">{hero.title}</h2>
+              <h2 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-3xl font-medium mb-1">{hero.title}</h2>
               <p className="opacity-75 text-sm mb-5">{hero.patient}</p>
 
               <div className="flex items-center gap-4 flex-wrap">
                 {hero.stats.map((s) => (
-                  <div key={s.label} className="bg-white/10 rounded-xl px-4 py-2.5 backdrop-blur-sm">
-                    <p className="text-[10px] opacity-70 font-semibold tracking-wide">{s.label}</p>
-                    <p className="font-black text-sm">{s.value}</p>
+                  <div key={s.label} className="bg-[#faf9f7]/10 rounded-xl px-4 py-2.5 backdrop-blur-sm">
+                    <p className="text-sm opacity-70 font-medium">{s.label}</p>
+                    <p className="font-bold text-sm">{s.value}</p>
                   </div>
                 ))}
               </div>
@@ -373,15 +575,21 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
 
             <div className="flex flex-col items-center ml-8 flex-shrink-0">
               <div className="relative">
-                <CircularProgress value={hero.progress} size={120} stroke={10} />
+                <CircularProgress
+                  value={hero.progress}
+                  size={120}
+                  stroke={10}
+                  trackColor={SILENT_AI.track}
+                  color={SILENT_AI.progressTeal}
+                />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <span className="text-3xl font-black" style={{ fontFamily: "'DM Mono', monospace" }}>{hero.progress}%</span>
+                  <div className="text-center rounded-full bg-[#faf9f7]/90 px-3 py-2 shadow-sm" style={{ color: SILENT_AI.slate }}>
+                    <span className="text-3xl font-bold" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>{hero.progress}%</span>
                     <p className="text-xs opacity-70">complete</p>
                   </div>
                 </div>
               </div>
-              <button onClick={() => onNavigate("agents")} className="mt-3 flex items-center gap-1.5 bg-white/20 hover:bg-white/30 transition px-4 py-2 rounded-xl text-xs font-bold">
+              <button onClick={() => onNavigate("agents")} className="mt-3 flex items-center gap-1.5 bg-[#faf9f7]/20 hover:bg-[#faf9f7]/30 transition px-4 py-2 rounded-xl text-xs font-bold">
                 View agents <ArrowRight size={12} />
               </button>
             </div>
@@ -391,28 +599,28 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
         {/* 3-col grid */}
         <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
           {/* Timeline summary */}
-          <div className="bg-white rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
+          <div className="bg-[#faf9f7] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
             <div className="flex items-center justify-between mb-4">
-              <p className="font-bold text-[#0F172A] text-sm">Journey Stages</p>
-              <button onClick={() => onNavigate("timeline")} className="text-xs text-[#0EA5E9] font-semibold hover:underline flex items-center gap-1">
+              <p className="font-bold text-[#0B192C] text-sm">Journey Stages</p>
+              <button onClick={() => onNavigate("timeline")} className="text-xs text-[#0284C7] font-medium hover:underline flex items-center gap-1">
                 Full view <ChevronRight size={12} />
               </button>
             </div>
             <div className="flex flex-col">
               {stages.map((s, i) => (
-                <div key={i} className="flex items-center gap-3">
+                <div key={i} className="flex items-start gap-3">
                   <div className="flex flex-col items-center">
                     <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      s.active ? "bg-[#0EA5E9]" : s.done ? "bg-[#14B8A6]" : "bg-[#E2E8F0]"
+                      s.active ? "bg-[#0284C7]" : s.done ? "bg-[#0284C7]" : "bg-[#a7c3e7]"
                     }`}>
-                      {s.done  && <Check size={9} className="text-white" />}
-                      {s.active && <div className="w-2 h-2 bg-white rounded-full animate-pulse" />}
+                      {s.done  && <Check size={9} className="text-[#faf9f7]" />}
+                      {s.active && <div className="w-2 h-2 bg-[#faf9f7] rounded-full animate-pulse" />}
                     </div>
-                    {i < stages.length - 1 && <div className={`w-0.5 h-4 ${s.done ? "bg-[#14B8A6]" : "bg-[#E2E8F0]"}`} />}
+                    {i < stages.length - 1 && <div className={`w-0.5 h-4 ${s.done ? "bg-[#0284C7]" : "bg-[#a7c3e7]"}`} />}
                   </div>
-                  <div className="flex items-center gap-2 flex-1 py-0.5">
+                  <div className="flex items-start gap-2 flex-1 py-0.5">
                     <span className={`text-xs ${
-                      s.active ? "font-bold text-[#0EA5E9]" :
+                      s.active ? "font-bold text-[#0284C7]" :
                       s.done   ? "text-[#94A3B8] line-through" :
                                  "text-[#C4CEDB]"
                     }`}>{s.label}</span>
@@ -424,13 +632,13 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
           </div>
 
           {/* AI agents overview */}
-          <div className="bg-white rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
+          <div className="bg-[#faf9f7] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <p className="font-bold text-[#0F172A] text-sm">AI Agents</p>
+                <p className="font-bold text-[#0B192C] text-sm">AI Agents</p>
                 <PulseDot />
               </div>
-              <button onClick={() => onNavigate("agents")} className="text-xs text-[#0EA5E9] font-semibold hover:underline flex items-center gap-1">
+              <button onClick={() => onNavigate("agents")} className="text-xs text-[#0284C7] font-medium hover:underline flex items-center gap-1">
                 All agents <ChevronRight size={12} />
               </button>
             </div>
@@ -447,10 +655,10 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-[#0F172A]">{a.name}</span>
+                        <span className="text-xs font-medium text-[#0B192C]">{a.name}</span>
                         <StatusBadge status={a.status} />
                       </div>
-                      <div className="h-1 bg-[#E2E8F0] rounded-full overflow-hidden">
+                      <div className="h-1 bg-[#a7c3e7] rounded-full overflow-hidden">
                         <div className="h-full rounded-full" style={{ width: `${a.progress}%`, backgroundColor: color, transition: "width 1s ease" }} />
                       </div>
                     </div>
@@ -461,13 +669,13 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
           </div>
 
           {/* Quick actions */}
-          <div className="bg-white rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
-            <p className="font-bold text-[#0F172A] text-sm mb-4">Quick Access</p>
+          <div className="bg-[#faf9f7] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
+            <p className="font-bold text-[#0B192C] text-sm mb-4">Quick Access</p>
             <div className="grid grid-cols-2 gap-2.5">
               {([
-                { label: "Hospitals",  sub: "Discover",                     icon: Building2,   color: "#0EA5E9", screen: "hospitals"  as Screen },
+                { label: "Hospitals",  sub: "Discover",                     icon: Building2,   color: "#0284C7", screen: "hospitals"  as Screen },
                 { label: "Documents",  sub: `${docsMissing} missing`,        icon: FileText,    color: "#F59E0B", screen: "vault"      as Screen },
-                { label: "Insurance",  sub: `${inr(journey.coverageLeftInr)} left`, icon: Shield, color: "#14B8A6", screen: "insurance"  as Screen },
+                { label: "Insurance",  sub: `${inr(journey.coverageLeftInr)} left`, icon: Shield, color: "#0284C7", screen: "insurance"  as Screen },
                 { label: "Approvals",  sub: `${approvalsPending} pending`,   icon: CheckSquare, color: "#8B5CF6", screen: "approvals"  as Screen },
               ] as const).map((item) => (
                 <button
@@ -478,8 +686,8 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                   <div className="w-7 h-7 rounded-lg flex items-center justify-center mb-2" style={{ backgroundColor: `${item.color}18` }}>
                     <item.icon size={14} style={{ color: item.color }} />
                   </div>
-                  <p className="font-bold text-[#0F172A] text-xs">{item.label}</p>
-                  <p className="text-[11px] text-[#64748B]">{item.sub}</p>
+                  <p className="font-bold text-[#0B192C] text-xs">{item.label}</p>
+                  <p className="text-sm text-[#64748B]">{item.sub}</p>
                 </button>
               ))}
             </div>
@@ -487,10 +695,10 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
         </div>
 
         {/* Activity feed */}
-        <div className="bg-white rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
+        <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <p className="font-bold text-[#0F172A]">Live Activity Feed</p>
+              <p className="font-bold text-[#0B192C]">Live Activity Feed</p>
               <p className="text-xs text-[#64748B] mt-0.5">What your AI team has been doing</p>
             </div>
             <div className="flex items-center gap-2 bg-[#F0FDF4] rounded-xl px-3 py-1.5">
@@ -503,11 +711,11 @@ function HomeScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
           ) : (
             <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
               {activity.map((a, i) => (
-                <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-[#F8FAFF]">
+                <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-[#F3F0EA]">
                   <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: a.color }} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-[#0F172A] leading-snug">{a.text}</p>
-                    <p className="text-[10px] text-[#94A3B8] mt-1 font-mono">{a.time}</p>
+                    <p className="text-xs text-[#0B192C]">{a.text}</p>
+                    <p className="text-sm text-[#94A3B8] mt-1">{a.time}</p>
                   </div>
                 </div>
               ))}
@@ -532,13 +740,14 @@ function AgentsScreen() {
   if (!journey) {
     return (
       <>
-        <TopBar title="Live Agent Activity" subtitle="Autonomous agents managing your healthcare journey" />
-        <div className="p-8">
-          <div className="bg-white rounded-2xl p-12 border border-[rgba(15,23,42,0.06)] text-center">
-            <div className="w-14 h-14 rounded-2xl bg-[#EFF6FF] flex items-center justify-center mx-auto mb-4">
-              <Zap size={22} className="text-[#0EA5E9]" />
+        <TopBar />
+        <div className="p-8 flex flex-col gap-6">
+          <PageIntro title="Live Agent Activity" subtitle="Autonomous agents managing your healthcare journey" />
+          <div className="bg-[#faf9f7] rounded-2xl p-12 border border-[rgba(15,23,42,0.06)] text-center">
+            <div className="w-14 h-14 rounded-2xl bg-[#E0FBFD] flex items-center justify-center mx-auto mb-4">
+              <Zap size={22} className="text-[#0284C7]" />
             </div>
-            <p className="font-bold text-[#0F172A]">No active journey yet</p>
+            <p className="font-bold text-[#0B192C]">No active journey yet</p>
             <p className="text-sm text-[#64748B] mt-1">Approve a health report on Home to deploy your agent team — their live steps, tokens and cost show up here.</p>
           </div>
         </div>
@@ -567,7 +776,7 @@ function AgentsScreen() {
       agent: e.agentName,
       text: e.message,
       time: relativeTime(e.createdAt),
-      color: i >= 0 ? AGENT_COLORS[i % AGENT_COLORS.length] : (ACTIVITY_KIND_COLOR[e.kind] ?? "#0EA5E9"),
+      color: i >= 0 ? AGENT_COLORS[i % AGENT_COLORS.length] : (ACTIVITY_KIND_COLOR[e.kind] ?? "#0284C7"),
       tokens: e.tokens,
       costUsd: e.costUsd,
     };
@@ -581,19 +790,20 @@ function AgentsScreen() {
 
   return (
     <>
-      <TopBar title="Live Agent Activity" subtitle={`${agentRows.length} agents · ${journey.title}`} />
+      <TopBar />
       <div className="p-8 flex flex-col gap-6">
+        <PageIntro title="Live Agent Activity" subtitle={`${agentRows.length} agents · ${journey.title}`} />
         {/* Summary row */}
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
           {[
-            { label: "Agents Active", value: String(agentsActive),               color: "#0EA5E9", bg: "#EFF6FF"  },
+            { label: "Agents Active", value: String(agentsActive),               color: "#0284C7", bg: "#E0FBFD"  },
             { label: "Steps Logged",  value: String(activityRows.length),         color: "#16A34A", bg: "#F0FDF4"  },
             { label: "Tokens Used",   value: tokensUsed.toLocaleString("en-US"),  color: "#8B5CF6", bg: "#F5F3FF"  },
-            { label: "Est. Cost",     value: fmtCost(costUsd),                    color: "#64748B", bg: "#F8FAFF"  },
+            { label: "Est. Cost",     value: fmtCost(costUsd),                    color: "#64748B", bg: "#F3F0EA"  },
           ].map((s) => (
-            <div key={s.label} className="bg-white rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
+            <div key={s.label} className="bg-[#faf9f7] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
               <p className="text-xs text-[#64748B] mb-1">{s.label}</p>
-              <p className="text-3xl font-black" style={{ fontFamily: "'DM Mono', monospace", color: s.color }}>{s.value}</p>
+              <p className="text-3xl font-bold" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif', color: s.color }}>{s.value}</p>
             </div>
           ))}
         </div>
@@ -602,44 +812,44 @@ function AgentsScreen() {
           {/* Agent cards */}
           <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
             {agents.map((agent) => (
-              <div key={agent.name} className="bg-white rounded-2xl p-5 border border-[rgba(15,23,42,0.06)] flex flex-col gap-4">
+              <div key={agent.name} className="bg-[#faf9f7] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)] flex flex-col gap-4">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ backgroundColor: `${agent.color}18` }}>
                       <Bot size={18} style={{ color: agent.color }} />
                     </div>
                     <div>
-                      <p className="font-bold text-[#0F172A] text-sm">{agent.name}</p>
+                      <p className="font-bold text-[#0B192C] text-sm">{agent.name}</p>
                       <p className="text-xs text-[#64748B]">{agent.role}</p>
                     </div>
                   </div>
                   <StatusBadge status={agent.status} />
                 </div>
 
-                <div className="bg-[#F8FAFF] rounded-xl p-3">
-                  <p className="text-xs text-[#64748B] leading-relaxed">{agent.action}</p>
+                <div className="bg-[#F3F0EA] rounded-xl p-3">
+                  <p className="text-xs text-[#64748B]">{agent.action}</p>
                 </div>
 
                 <div className="flex items-center gap-3 mt-auto">
-                  <div className="flex-1 h-1.5 bg-[#E2E8F0] rounded-full overflow-hidden">
+                  <div className="flex-1 h-1.5 bg-[#a7c3e7] rounded-full overflow-hidden">
                     <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${agent.progress}%`, backgroundColor: agent.color }} />
                   </div>
-                  <span className="text-[11px] font-bold text-[#94A3B8]" style={{ fontFamily: "'DM Mono', monospace" }}>{agent.tasks} steps</span>
+                  <span className="text-sm font-bold text-[#94A3B8]" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>{agent.tasks} steps</span>
                 </div>
               </div>
             ))}
           </div>
 
           {/* Live event stream */}
-          <div className="bg-white rounded-2xl p-5 border border-[rgba(15,23,42,0.06)] flex flex-col">
+          <div className="bg-[#faf9f7] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)] flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="font-bold text-[#0F172A] text-sm">Event Stream</p>
+                <p className="font-bold text-[#0B192C] text-sm">Event Stream</p>
                 <p className="text-xs text-[#64748B]">Real-time agent actions</p>
               </div>
               <div className="flex items-center gap-1.5 bg-[#F0FDF4] rounded-lg px-2 py-1">
                 <PulseDot color="#16A34A" size="sm" />
-                <span className="text-[10px] font-bold text-[#16A34A]">LIVE</span>
+                <span className="text-sm font-bold text-[#16A34A]">LIVE</span>
               </div>
             </div>
 
@@ -651,9 +861,9 @@ function AgentsScreen() {
                 <div key={i} className="flex items-start gap-3 border-b border-[rgba(15,23,42,0.04)] pb-3 last:border-0 last:pb-0">
                   <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: e.color }} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold mb-0.5" style={{ color: e.color }}>{e.agent}</p>
-                    <p className="text-xs text-[#0F172A] leading-snug">{e.text}</p>
-                    <p className="text-[10px] text-[#94A3B8] mt-0.5 font-mono">
+                    <p className="text-sm font-bold mb-0.5" style={{ color: e.color }}>{e.agent}</p>
+                    <p className="text-xs text-[#0B192C]">{e.text}</p>
+                    <p className="text-sm text-[#94A3B8] mt-0.5">
                       {e.time}
                       {typeof e.tokens === "number" ? ` · ${e.tokens.toLocaleString("en-US")} tok` : ""}
                       {typeof e.costUsd === "number" ? ` · ${fmtCost(e.costUsd)}` : ""}
@@ -684,20 +894,21 @@ function TimelineScreen() {
   ];
 
   const cfg = {
-    done:    { dot: "#14B8A6", label: "Completed", bg: "#F0FDF4" },
-    running: { dot: "#0EA5E9", label: "In Progress", bg: "#EFF6FF" },
-    pending: { dot: "#E2E8F0", label: "Upcoming",   bg: "#F8FAFF" },
+    done:    { dot: "#0284C7", label: "Completed", bg: "#F0FDF4" },
+    running: { dot: "#0284C7", label: "In Progress", bg: "#E0FBFD" },
+    pending: { dot: "#a7c3e7", label: "Upcoming",   bg: "#F3F0EA" },
   };
 
   const sel = stages[selected];
 
   return (
     <>
-      <TopBar title="Journey Timeline" subtitle="Father's Knee Surgery — 72% complete across 6 stages" />
-      <div className="p-8">
+      <TopBar />
+      <div className="p-8 flex flex-col gap-6">
+        <PageIntro title="Journey Timeline" subtitle="Father's Knee Surgery - 72% complete across 6 stages" />
         <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 380px" }}>
           {/* Timeline */}
-          <div className="bg-white rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
+          <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
             <div className="flex flex-col">
               {stages.map((stage, i) => {
                 const c = cfg[stage.status];
@@ -705,20 +916,20 @@ function TimelineScreen() {
                 return (
                   <button key={i} className="flex gap-5 text-left group" onClick={() => setSelected(i)}>
                     <div className="flex flex-col items-center">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 z-10 ring-2 transition-all ${isSelected ? "ring-[#0EA5E9] ring-offset-2" : "ring-transparent"}`} style={{ backgroundColor: c.dot }}>
-                        {stage.status === "done"    && <Check size={12} className="text-white" />}
-                        {stage.status === "running" && <div className="w-2.5 h-2.5 bg-white rounded-full animate-pulse" />}
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 z-10 ring-2 transition-all ${isSelected ? "ring-[#0284C7] ring-offset-2" : "ring-transparent"}`} style={{ backgroundColor: c.dot }}>
+                        {stage.status === "done"    && <Check size={12} className="text-[#faf9f7]" />}
+                        {stage.status === "running" && <div className="w-2.5 h-2.5 bg-[#faf9f7] rounded-full animate-pulse" />}
                         {stage.status === "pending" && <div className="w-2.5 h-2.5 bg-[#94A3B8] rounded-full" />}
                       </div>
-                      {i < stages.length - 1 && <div className="w-0.5 flex-1 min-h-[32px]" style={{ backgroundColor: stage.status === "done" ? "#14B8A6" : "#E2E8F0" }} />}
+                      {i < stages.length - 1 && <div className="w-0.5 flex-1 min-h-[32px]" style={{ backgroundColor: stage.status === "done" ? "#0284C7" : "#a7c3e7" }} />}
                     </div>
 
-                    <div className={`flex-1 pb-6 px-4 py-2 rounded-xl mb-1 transition-all ${isSelected ? "bg-[#F8FAFF] border border-[rgba(15,23,42,0.06)]" : "hover:bg-[#F8FAFF]/50"}`}>
+                    <div className={`flex-1 pb-6 px-4 py-2 rounded-xl mb-1 transition-all ${isSelected ? "bg-[#F3F0EA] border border-[rgba(15,23,42,0.06)]" : "hover:bg-[#F3F0EA]/50"}`}>
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black tracking-widest" style={{ color: c.dot }}>{c.label}</span>
-                        <span className="text-[10px] text-[#94A3B8] font-mono">{stage.date}</span>
+                        <span className="text-sm font-bold" style={{ color: c.dot }}>{c.label}</span>
+                        <span className="text-sm text-[#94A3B8]">{stage.date}</span>
                       </div>
-                      <p className="font-bold text-[#0F172A]">{stage.label}</p>
+                      <p className="font-bold text-[#0B192C]">{stage.label}</p>
                       <p className="text-sm text-[#64748B]">{stage.sub}</p>
                     </div>
                   </button>
@@ -729,13 +940,13 @@ function TimelineScreen() {
 
           {/* Detail panel */}
           <div className="flex flex-col gap-4">
-            <div className="bg-white rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
+            <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] font-black tracking-widest" style={{ color: cfg[sel.status].dot }}>
-                  {cfg[sel.status].label.toUpperCase()}
+                <span className="text-sm font-bold" style={{ color: cfg[sel.status].dot }}>
+                  {cfg[sel.status].label}
                 </span>
               </div>
-              <h3 style={{ fontFamily: "'Outfit', sans-serif" }} className="text-xl font-bold text-[#0F172A] mb-1">{sel.label}</h3>
+              <h3 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-xl font-medium text-[#0B192C] mb-1">{sel.label}</h3>
               <p className="text-sm text-[#64748B] mb-4">{sel.sub} · {sel.date}</p>
 
               <div className="flex flex-col gap-2">
@@ -743,13 +954,13 @@ function TimelineScreen() {
                   const isDone    = sel.status === "done" || (sel.status === "running" && j < 2);
                   const isCurrent = sel.status === "running" && j === 2;
                   return (
-                    <div key={j} className={`flex items-center gap-3 p-3 rounded-xl ${isDone ? "bg-[#F0FDF4]" : isCurrent ? "bg-[#FFFBEB]" : "bg-[#F8FAFF]"}`}>
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${isDone ? "bg-[#D1FAE5]" : isCurrent ? "bg-[#FEF3C7]" : "bg-[#E2E8F0]"}`}>
+                    <div key={j} className={`flex items-center gap-3 p-3 rounded-xl ${isDone ? "bg-[#F0FDF4]" : isCurrent ? "bg-[#FFFBEB]" : "bg-[#F3F0EA]"}`}>
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${isDone ? "bg-[#D1FAE5]" : isCurrent ? "bg-[#FEF3C7]" : "bg-[#a7c3e7]"}`}>
                         {isDone    ? <Check size={10} className="text-[#16A34A]" /> :
                          isCurrent ? <Timer size={10} className="text-[#D97706]" /> :
                                      <Circle size={10} className="text-[#CBD5E1]" />}
                       </div>
-                      <span className={`text-sm ${isDone ? "text-[#64748B] line-through" : isCurrent ? "text-[#D97706] font-semibold" : "text-[#CBD5E1]"}`}>
+                      <span className={`text-sm ${isDone ? "text-[#64748B] line-through" : isCurrent ? "text-[#D97706] font-medium" : "text-[#CBD5E1]"}`}>
                         {step}
                       </span>
                     </div>
@@ -759,10 +970,10 @@ function TimelineScreen() {
             </div>
 
             {sel.status === "running" && (
-              <div className="bg-gradient-to-br from-[#0EA5E9] to-[#14B8A6] rounded-2xl p-5 text-white">
+              <div className="bg-gradient-to-br from-[#0284C7] to-[#0284C7] rounded-2xl p-5 text-[#faf9f7]">
                 <div className="flex items-center gap-2 mb-2">
-                  <PulseDot color="white" />
-                  <span className="text-xs font-black opacity-80 tracking-wider">AGENT WORKING</span>
+                  <PulseDot color="#faf9f7" />
+                  <span className="text-xs font-bold opacity-80">AGENT WORKING</span>
                 </div>
                 <p className="font-bold">Hospital Agent is active</p>
                 <p className="text-sm opacity-75 mt-0.5">Comparing 3 hospitals on insurance coverage, wait time, and surgeon expertise</p>
@@ -796,13 +1007,14 @@ function HospitalsScreen() {
 
   return (
     <>
-      <TopBar title="Hospital Discovery" subtitle="AI-matched hospitals for Total Knee Replacement — Star Health accepted" />
+      <TopBar />
       <div className="p-8 flex flex-col gap-6">
+        <PageIntro title="Hospital Discovery" subtitle="AI-matched hospitals for Total Knee Replacement - Star Health accepted" />
         {/* Filters */}
         <div className="flex items-center gap-3">
           {["All", "Covered", "< 5km", "Top Rated"].map((f) => (
             <button key={f} onClick={() => setFilter(f)}
-              className={`text-sm font-bold px-4 py-2 rounded-xl transition ${filter === f ? "bg-[#0EA5E9] text-white" : "bg-white text-[#64748B] border border-[rgba(15,23,42,0.08)] hover:border-[#0EA5E9] hover:text-[#0EA5E9]"}`}>
+              className={`text-sm font-bold px-4 py-2 rounded-xl transition ${filter === f ? "bg-[#0284C7] text-[#faf9f7]" : "bg-[#faf9f7] text-[#64748B] border border-[rgba(15,23,42,0.08)] hover:border-[#0284C7] hover:text-[#0284C7]"}`}>
               {f}
             </button>
           ))}
@@ -816,25 +1028,25 @@ function HospitalsScreen() {
           <div className="flex flex-col gap-4">
             {/* Map */}
             <div className="rounded-2xl h-64 relative overflow-hidden border border-[rgba(15,23,42,0.06)]"
-              style={{ background: "linear-gradient(135deg, #EFF6FF 0%, #E0F2FE 50%, #CCFBF1 100%)" }}>
+              style={{ background: "linear-gradient(135deg, #E0FBFD 0%, #E0FBFD 50%, #B6F4FA 100%)" }}>
               <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
                 {[...Array(9)].map((_, i) => (
-                  <line key={`v${i}`} x1={`${i * 12.5}%`} y1="0" x2={`${i * 12.5}%`} y2="100%" stroke="#0EA5E9" strokeWidth="0.4" opacity="0.2" />
+                  <line key={`v${i}`} x1={`${i * 12.5}%`} y1="0" x2={`${i * 12.5}%`} y2="100%" stroke="#0284C7" strokeWidth="0.4" opacity="0.2" />
                 ))}
                 {[...Array(7)].map((_, i) => (
-                  <line key={`h${i}`} x1="0" y1={`${i * 16.7}%`} x2="100%" y2={`${i * 16.7}%`} stroke="#0EA5E9" strokeWidth="0.4" opacity="0.2" />
+                  <line key={`h${i}`} x1="0" y1={`${i * 16.7}%`} x2="100%" y2={`${i * 16.7}%`} stroke="#0284C7" strokeWidth="0.4" opacity="0.2" />
                 ))}
-                <path d="M50,130 Q150,100 250,115 Q350,130 500,105 Q620,85 750,110 Q850,125 950,95" fill="none" stroke="#0EA5E9" strokeWidth="2" opacity="0.35" />
-                <path d="M0,160 Q120,140 250,155 Q380,165 500,145 Q640,130 780,150 Q880,160 960,140" fill="none" stroke="#14B8A6" strokeWidth="1.5" opacity="0.25" />
-                <path d="M80,80 Q200,70 350,90 Q480,105 600,85 Q720,70 850,88" fill="none" stroke="#0EA5E9" strokeWidth="1" opacity="0.15" />
+                <path d="M50,130 Q150,100 250,115 Q350,130 500,105 Q620,85 750,110 Q850,125 950,95" fill="none" stroke="#0284C7" strokeWidth="2" opacity="0.35" />
+                <path d="M0,160 Q120,140 250,155 Q380,165 500,145 Q640,130 780,150 Q880,160 960,140" fill="none" stroke="#0284C7" strokeWidth="1.5" opacity="0.25" />
+                <path d="M80,80 Q200,70 350,90 Q480,105 600,85 Q720,70 850,88" fill="none" stroke="#0284C7" strokeWidth="1" opacity="0.15" />
               </svg>
 
               {hospitals.map((h, i) => (
                 <button key={h.name} className="absolute flex flex-col items-center transition-all hover:scale-110" style={{ left: h.pin.x, top: h.pin.y, transform: "translate(-50%,-100%)" }} onClick={() => setSelected(i)}>
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shadow-lg transition-all ${selected === i ? "bg-[#0EA5E9] scale-110" : "bg-white border-2 border-[#0EA5E9]"}`}>
-                    <Building2 size={14} className={selected === i ? "text-white" : "text-[#0EA5E9]"} />
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shadow-lg transition-all ${selected === i ? "bg-[#0284C7] scale-110" : "bg-[#faf9f7] border-2 border-[#0284C7]"}`}>
+                    <Building2 size={14} className={selected === i ? "text-[#faf9f7]" : "text-[#0284C7]"} />
                   </div>
-                  <div className={`text-[9px] font-black mt-0.5 px-2 py-0.5 rounded shadow-sm whitespace-nowrap ${selected === i ? "bg-[#0EA5E9] text-white" : "bg-white text-[#0F172A]"}`}>
+                  <div className={`text-sm font-bold mt-0.5 px-2 py-0.5 rounded shadow-sm whitespace-nowrap ${selected === i ? "bg-[#0284C7] text-[#faf9f7]" : "bg-[#faf9f7] text-[#0B192C]"}`}>
                     {h.name.split(" ")[0]}
                   </div>
                 </button>
@@ -842,13 +1054,13 @@ function HospitalsScreen() {
 
               <div className="absolute" style={{ left: "50%", top: "52%", transform: "translate(-50%,-50%)" }}>
                 <div className="relative w-5 h-5">
-                  <div className="absolute inset-0 bg-[#0EA5E9] rounded-full animate-ping opacity-30" />
-                  <div className="relative w-5 h-5 bg-[#0EA5E9] rounded-full border-3 border-white shadow-lg" />
+                  <div className="absolute inset-0 bg-[#0284C7] rounded-full animate-ping opacity-30" />
+                  <div className="relative w-5 h-5 bg-[#0284C7] rounded-full border-3 border-[#faf9f7] shadow-lg" />
                 </div>
               </div>
 
-              <div className="absolute bottom-3 right-3 bg-white/80 backdrop-blur rounded-xl px-3 py-1.5">
-                <span className="text-xs font-bold text-[#0F172A]">Mumbai, Maharashtra</span>
+              <div className="absolute bottom-3 right-3 bg-[#faf9f7]/80 backdrop-blur rounded-xl px-3 py-1.5">
+                <span className="text-xs font-bold text-[#0B192C]">Mumbai, Maharashtra</span>
               </div>
             </div>
 
@@ -856,27 +1068,27 @@ function HospitalsScreen() {
             <div className="flex flex-col gap-3">
               {filtered.map((h, i) => (
                 <button key={h.name} onClick={() => setSelected(hospitals.indexOf(h))}
-                  className={`bg-white rounded-2xl p-4 border text-left transition-all ${selected === hospitals.indexOf(h) ? "border-[#0EA5E9] shadow-md" : "border-[rgba(15,23,42,0.06)] hover:shadow-sm"}`}>
+                  className={`bg-[#faf9f7] rounded-2xl p-4 border text-left transition-all ${selected === hospitals.indexOf(h) ? "border-[#0284C7] shadow-md" : "border-[rgba(15,23,42,0.06)] hover:shadow-sm"}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
-                      <h3 className="font-bold text-[#0F172A]">{h.name}</h3>
-                      {h.covered && <span className="text-[9px] font-black bg-[#F0FDF4] text-[#16A34A] px-2 py-0.5 rounded-full tracking-wider">COVERED</span>}
+                      <h3 className="font-medium text-[#0B192C]">{h.name}</h3>
+                      {h.covered && <span className="text-sm font-bold bg-[#F0FDF4] text-[#16A34A] px-2 py-0.5 rounded-full">COVERED</span>}
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Star size={12} className="text-[#F59E0B] fill-[#F59E0B]" />
-                      <span className="font-black text-[#0F172A] text-sm">{h.rating}</span>
+                      <span className="font-bold text-[#0B192C] text-sm">{h.rating}</span>
                     </div>
                   </div>
-                  <p className="text-xs text-[#0EA5E9] font-semibold mb-3">{h.specialty}</p>
+                  <p className="text-xs text-[#0284C7] font-medium mb-3">{h.specialty}</p>
                   <div className="grid grid-cols-3 gap-2">
                     {[
                       { label: "Distance",     value: h.dist  },
                       { label: "Wait time",    value: h.wait  },
                       { label: "Out-of-pocket", value: h.oop  },
                     ].map((s) => (
-                      <div key={s.label} className="bg-[#F8FAFF] rounded-xl p-2">
-                        <p className="text-[9px] text-[#64748B] mb-0.5">{s.label}</p>
-                        <p className="text-xs font-black text-[#0F172A]">{s.value}</p>
+                      <div key={s.label} className="bg-[#F3F0EA] rounded-xl p-2">
+                        <p className="text-sm text-[#64748B] mb-0.5">{s.label}</p>
+                        <p className="text-xs font-bold text-[#0B192C]">{s.value}</p>
                       </div>
                     ))}
                   </div>
@@ -887,46 +1099,46 @@ function HospitalsScreen() {
 
           {/* Detail sidebar */}
           <div className="flex flex-col gap-4">
-            <div className="bg-white rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
+            <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
               <div className="flex items-center justify-between mb-1">
-                <h3 style={{ fontFamily: "'Outfit', sans-serif" }} className="text-xl font-bold text-[#0F172A]">{sel.name}</h3>
-                {sel.covered && <span className="text-[9px] font-black bg-[#F0FDF4] text-[#16A34A] px-2.5 py-1 rounded-full tracking-wider">STAR HEALTH COVERED</span>}
+                <h3 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-xl font-medium text-[#0B192C]">{sel.name}</h3>
+                {sel.covered && <span className="text-sm font-bold bg-[#F0FDF4] text-[#16A34A] px-2.5 py-1 rounded-full">STAR HEALTH COVERED</span>}
               </div>
               <p className="text-sm text-[#64748B] mb-5">{sel.location} · {sel.dist} away</p>
 
               <div className="grid grid-cols-2 gap-3 mb-5">
                 {[
                   { label: "Rating",       value: `${sel.rating} / 5.0`, color: "#F59E0B" },
-                  { label: "Wait Time",    value: sel.wait,               color: "#0EA5E9" },
+                  { label: "Wait Time",    value: sel.wait,               color: "#0284C7" },
                   { label: "Out-of-Pocket", value: sel.oop,               color: "#8B5CF6" },
-                  { label: "Total Beds",   value: `${sel.beds}+`,         color: "#14B8A6" },
+                  { label: "Total Beds",   value: `${sel.beds}+`,         color: "#0284C7" },
                 ].map((s) => (
-                  <div key={s.label} className="bg-[#F8FAFF] rounded-xl p-3">
-                    <p className="text-[10px] text-[#64748B] mb-0.5">{s.label}</p>
-                    <p className="font-black" style={{ color: s.color, fontFamily: "'DM Mono', monospace" }}>{s.value}</p>
+                  <div key={s.label} className="bg-[#F3F0EA] rounded-xl p-3">
+                    <p className="text-sm text-[#64748B] mb-0.5">{s.label}</p>
+                    <p className="font-bold" style={{ color: s.color, fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>{s.value}</p>
                   </div>
                 ))}
               </div>
 
               <div className="mb-5">
                 <p className="text-xs text-[#64748B] mb-1.5">Specialty Unit</p>
-                <p className="font-semibold text-[#0F172A] text-sm">{sel.specialty}</p>
+                <p className="font-medium text-[#0B192C] text-sm">{sel.specialty}</p>
               </div>
 
               <div className="mb-5">
                 <p className="text-xs text-[#64748B] mb-1.5">Available Surgeons</p>
-                <p className="font-semibold text-[#0F172A] text-sm">{sel.surgeons}</p>
+                <p className="font-medium text-[#0B192C] text-sm">{sel.surgeons}</p>
               </div>
 
-              <button className="w-full bg-[#0EA5E9] hover:bg-[#0284C7] text-white font-bold py-3 rounded-xl transition-colors">
+              <button className="w-full bg-[#0284C7] hover:bg-[#0B192C] text-[#faf9f7] font-bold py-3 rounded-xl transition-colors">
                 Book Appointment
               </button>
             </div>
 
-            <div className="bg-gradient-to-br from-[#0EA5E9] to-[#14B8A6] rounded-2xl p-5 text-white">
+            <div className="bg-gradient-to-br from-[#0284C7] to-[#0284C7] rounded-2xl p-5 text-[#faf9f7]">
               <div className="flex items-center gap-2 mb-2">
-                <PulseDot color="white" />
-                <span className="text-xs font-black opacity-80 tracking-wider">HOSPITAL AGENT</span>
+                <PulseDot color="#faf9f7" />
+                <span className="text-xs font-bold opacity-80">HOSPITAL AGENT</span>
               </div>
               <p className="font-bold">Apollo Hospitals recommended</p>
               <p className="text-sm opacity-75 mt-1">Best combination of insurance coverage, wait time, and surgeon expertise for your father's TKR surgery.</p>
@@ -948,7 +1160,7 @@ function InsuranceScreen() {
     { name: "Used", value: 80000 },
     { name: "Remaining", value: 420000 },
   ];
-  const COLORS = ["#0EA5E9", "#E2E8F0"];
+  const COLORS = ["#0284C7", "#a7c3e7"];
 
   const monthlyData = [
     { month: "Mar", amount: 0 },
@@ -967,13 +1179,14 @@ function InsuranceScreen() {
 
   return (
     <>
-      <TopBar title="Insurance & Claims" subtitle="Star Health Comprehensive · Policy #SHC-2024-887231" />
+      <TopBar />
       <div className="p-8 flex flex-col gap-6">
+        <PageIntro title="Insurance & Claims" subtitle="Star Health Comprehensive - Policy #SHC-2024-887231" />
         {/* Top row */}
         <div className="grid gap-6" style={{ gridTemplateColumns: "300px 1fr" }}>
           {/* Coverage donut */}
-          <div className="bg-white rounded-2xl p-6 border border-[rgba(15,23,42,0.06)] flex flex-col items-center">
-            <p className="font-bold text-[#0F172A] text-sm mb-4 self-start">Annual Coverage</p>
+          <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)] flex flex-col items-center">
+            <p className="font-bold text-[#0B192C] text-sm mb-4 self-start">Annual Coverage</p>
             <div className="relative">
               <ResponsiveContainer width={180} height={180}>
                 <PieChart>
@@ -983,18 +1196,18 @@ function InsuranceScreen() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex items-center justify-center flex-col">
-                <span className="text-2xl font-black text-[#0F172A]" style={{ fontFamily: "'DM Mono', monospace" }}>16%</span>
+                <span className="text-2xl font-bold text-[#0B192C]" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>16%</span>
                 <span className="text-xs text-[#64748B]">used</span>
               </div>
             </div>
             <div className="w-full mt-4 flex flex-col gap-2">
               <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-sm bg-[#0EA5E9]" /><span className="text-[#64748B]">Used</span></div>
-                <span className="font-black text-[#0F172A]" style={{ fontFamily: "'DM Mono', monospace" }}>₹80,000</span>
+                <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-sm bg-[#0284C7]" /><span className="text-[#64748B]">Used</span></div>
+                <span className="font-bold text-[#0B192C]" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>₹80,000</span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-sm bg-[#E2E8F0]" /><span className="text-[#64748B]">Remaining</span></div>
-                <span className="font-black text-[#0F172A]" style={{ fontFamily: "'DM Mono', monospace" }}>₹4,20,000</span>
+                <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-sm bg-[#a7c3e7]" /><span className="text-[#64748B]">Remaining</span></div>
+                <span className="font-bold text-[#0B192C]" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>₹4,20,000</span>
               </div>
             </div>
           </div>
@@ -1003,38 +1216,38 @@ function InsuranceScreen() {
           <div className="flex flex-col gap-4">
             <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
               {[
-                { label: "Surgery Estimate",         value: "₹1,80,000", color: "#0EA5E9" },
-                { label: "Expected Reimbursement",   value: "₹1,52,000", color: "#14B8A6" },
+                { label: "Surgery Estimate",         value: "₹1,80,000", color: "#0284C7" },
+                { label: "Expected Reimbursement",   value: "₹1,52,000", color: "#0284C7" },
                 { label: "Deductible",               value: "₹10,000",   color: "#F59E0B" },
                 { label: "Co-pay",                   value: "10%",        color: "#8B5CF6" },
               ].map((s) => (
-                <div key={s.label} className="bg-white rounded-2xl p-4 border border-[rgba(15,23,42,0.06)]">
-                  <p className="text-xs text-[#64748B] mb-1 leading-tight">{s.label}</p>
-                  <p className="text-xl font-black" style={{ color: s.color, fontFamily: "'DM Mono', monospace" }}>{s.value}</p>
+                <div key={s.label} className="bg-[#faf9f7] rounded-2xl p-4 border border-[rgba(15,23,42,0.06)]">
+                  <p className="text-xs text-[#64748B] mb-1">{s.label}</p>
+                  <p className="text-xl font-bold" style={{ color: s.color, fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>{s.value}</p>
                 </div>
               ))}
             </div>
 
             {/* Claim pipeline */}
-            <div className="bg-white rounded-2xl p-5 border border-[rgba(15,23,42,0.06)] flex-1">
-              <p className="font-bold text-[#0F172A] text-sm mb-5">Current Claim Pipeline</p>
+            <div className="bg-[#faf9f7] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)] flex-1">
+              <p className="font-bold text-[#0B192C] text-sm mb-5">Current Claim Pipeline</p>
               <div className="flex items-center">
                 {claimSteps.map((step, i) => (
                   <div key={step} className="flex items-center flex-1">
                     <div className="flex flex-col items-center flex-1">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-black mb-2 ${
-                        i < current ? "bg-[#14B8A6] text-white" : i === current ? "bg-[#0EA5E9] text-white" : "bg-[#E2E8F0] text-[#94A3B8]"
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mb-2 ${
+                        i < current ? "bg-[#0284C7] text-[#faf9f7]" : i === current ? "bg-[#0284C7] text-[#faf9f7]" : "bg-[#a7c3e7] text-[#94A3B8]"
                       }`}>
                         {i < current ? <Check size={12} /> : i + 1}
                       </div>
-                      <span className="text-[10px] text-[#64748B] text-center leading-tight">{step}</span>
+                      <span className="text-sm text-[#64748B] text-center">{step}</span>
                     </div>
-                    {i < claimSteps.length - 1 && <div className={`h-0.5 flex-1 mb-6 ${i < current ? "bg-[#14B8A6]" : "bg-[#E2E8F0]"}`} />}
+                    {i < claimSteps.length - 1 && <div className={`h-0.5 flex-1 mb-6 ${i < current ? "bg-[#0284C7]" : "bg-[#a7c3e7]"}`} />}
                   </div>
                 ))}
               </div>
-              <div className="bg-[#EFF6FF] rounded-xl p-3 mt-4">
-                <p className="text-xs font-bold text-[#0EA5E9]">Docs Collected stage — agent is active</p>
+              <div className="bg-[#E0FBFD] rounded-xl p-3 mt-4">
+                <p className="text-xs font-bold text-[#0284C7]">Docs Collected stage — agent is active</p>
                 <p className="text-xs text-[#64748B] mt-0.5">Document Agent collecting discharge summary and hospital bills. Estimated 3 days to complete.</p>
               </div>
             </div>
@@ -1044,28 +1257,28 @@ function InsuranceScreen() {
         {/* Charts row */}
         <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 1fr" }}>
           {/* Area chart */}
-          <div className="bg-white rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
-            <p className="font-bold text-[#0F172A] text-sm mb-4">Coverage Usage This Year</p>
+          <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
+            <p className="font-bold text-[#0B192C] text-sm mb-4">Coverage Usage This Year</p>
             <ResponsiveContainer width="100%" height={180}>
               <AreaChart data={monthlyData}>
                 <defs>
                   <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0EA5E9" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#0EA5E9" stopOpacity={0.01} />
+                    <stop offset="5%" stopColor="#0284C7" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#0284C7" stopOpacity={0.01} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.04)" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#94A3B8" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: "#94A3B8" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: number) => [`₹${v.toLocaleString()}`, "Amount used"]} contentStyle={{ fontSize: 12, borderRadius: 12, border: "1px solid rgba(15,23,42,0.08)" }} />
-                <Area type="monotone" dataKey="amount" stroke="#0EA5E9" strokeWidth={2} fill="url(#areaGrad)" dot={{ fill: "#0EA5E9", r: 4 }} />
+                <Area type="monotone" dataKey="amount" stroke="#0284C7" strokeWidth={2} fill="url(#areaGrad)" dot={{ fill: "#0284C7", r: 4 }} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
 
           {/* Bar chart */}
-          <div className="bg-white rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
-            <p className="font-bold text-[#0F172A] text-sm mb-1">Reimbursements Breakdown</p>
+          <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
+            <p className="font-bold text-[#0B192C] text-sm mb-1">Reimbursements Breakdown</p>
             <p className="text-xs text-[#64748B] mb-4">*Surgery is an estimate</p>
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={barData} barSize={32}>
@@ -1073,22 +1286,22 @@ function InsuranceScreen() {
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94A3B8" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: "#94A3B8" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: number) => [`₹${v.toLocaleString()}`, "Amount"]} contentStyle={{ fontSize: 12, borderRadius: 12, border: "1px solid rgba(15,23,42,0.08)" }} />
-                <Bar dataKey="amount" fill="#0EA5E9" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="amount" fill="#0284C7" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Past claims table */}
-        <div className="bg-white rounded-2xl border border-[rgba(15,23,42,0.06)] overflow-hidden">
+        <div className="bg-[#faf9f7] rounded-2xl border border-[rgba(15,23,42,0.06)] overflow-hidden">
           <div className="px-6 py-4 border-b border-[rgba(15,23,42,0.06)]">
-            <p className="font-bold text-[#0F172A] text-sm">Reimbursement History</p>
+            <p className="font-bold text-[#0B192C] text-sm">Reimbursement History</p>
           </div>
           <table className="w-full">
             <thead>
               <tr className="border-b border-[rgba(15,23,42,0.04)]">
                 {["Description", "Date", "Amount", "Submitted", "Status"].map((h) => (
-                  <th key={h} className="px-6 py-3 text-left text-[10px] font-black text-[#94A3B8] tracking-wider">{h}</th>
+                  <th key={h} className="px-6 py-3 text-left text-sm font-bold text-[#94A3B8]">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1098,13 +1311,13 @@ function InsuranceScreen() {
                 { desc: "Orthopedic Specialist Consult", date: "Jun 28, 2025", amount: "₹3,200",  submitted: "Jun 29, 2025", status: "Paid"       },
                 { desc: "Pre-operative Blood Panel",   date: "Jul 5, 2025",  amount: "₹4,800",  submitted: "Jul 6, 2025",  status: "Processing" },
               ].map((r, i) => (
-                <tr key={i} className="border-b border-[rgba(15,23,42,0.04)] last:border-0 hover:bg-[#F8FAFF] transition-colors">
-                  <td className="px-6 py-4 text-sm font-medium text-[#0F172A]">{r.desc}</td>
-                  <td className="px-6 py-4 text-sm text-[#64748B] font-mono">{r.date}</td>
-                  <td className="px-6 py-4 text-sm font-black text-[#0F172A] font-mono">{r.amount}</td>
-                  <td className="px-6 py-4 text-sm text-[#64748B] font-mono">{r.submitted}</td>
+                <tr key={i} className="border-b border-[rgba(15,23,42,0.04)] last:border-0 hover:bg-[#F3F0EA] transition-colors">
+                  <td className="px-6 py-4 text-sm font-medium text-[#0B192C]">{r.desc}</td>
+                  <td className="px-6 py-4 text-sm text-[#64748B]">{r.date}</td>
+                  <td className="px-6 py-4 text-sm font-bold text-[#0B192C]">{r.amount}</td>
+                  <td className="px-6 py-4 text-sm text-[#64748B]">{r.submitted}</td>
                   <td className="px-6 py-4">
-                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full tracking-wide ${r.status === "Paid" ? "bg-[#F0FDF4] text-[#16A34A]" : "bg-[#FFFBEB] text-[#D97706]"}`}>
+                    <span className={`text-xs font-medium px-3 py-1 rounded-full ${r.status === "Paid" ? "bg-[#F0FDF4] text-[#16A34A]" : "bg-[#FFFBEB] text-[#D97706]"}`}>
                       {r.status.toUpperCase()}
                     </span>
                   </td>
@@ -1122,9 +1335,9 @@ function InsuranceScreen() {
 
 // The must-have documents for the demo journey.
 const REQUIRED_DOCS = [
-  { label: "Insurance Policy",      type: "Insurance",     category: "insurance", icon: Shield,      color: "#0EA5E9" },
+  { label: "Insurance Policy",      type: "Insurance",     category: "insurance", icon: Shield,      color: "#0284C7" },
   { label: "Aadhaar Card",          type: "Government ID", category: "identity",  icon: ShieldCheck, color: "#8B5CF6" },
-  { label: "PAN Card",              type: "Government ID", category: "identity",  icon: CreditCard,  color: "#14B8A6" },
+  { label: "PAN Card",              type: "Government ID", category: "identity",  icon: CreditCard,  color: "#0284C7" },
   { label: "Doctor's Prescription", type: "Prescription",  category: "medical",   icon: Stethoscope, color: "#F59E0B" },
 ];
 
@@ -1153,8 +1366,9 @@ function VaultScreen() {
 
   return (
     <>
-      <TopBar title="Document Vault" subtitle={`${uploadedCount} of ${REQUIRED_DOCS.length} required documents uploaded`} />
+      <TopBar />
       <div className="p-8 flex flex-col gap-6">
+        <PageIntro title="Document Vault" subtitle={`${uploadedCount} of ${REQUIRED_DOCS.length} required documents uploaded`} />
         {/* Required documents */}
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
           {REQUIRED_DOCS.map((doc) => {
@@ -1162,7 +1376,7 @@ function VaultScreen() {
             const ok = !!item;
             const isUp = uploading === doc.label;
             return (
-              <div key={doc.label} className={`bg-white rounded-2xl p-5 border flex flex-col ${ok ? "border-[rgba(15,23,42,0.06)]" : "border-[#FCA5A5] bg-[#FFF8F8]"}`}>
+              <div key={doc.label} className={`bg-[#faf9f7] rounded-2xl p-5 border flex flex-col ${ok ? "border-[rgba(15,23,42,0.06)]" : "border-[#FCA5A5] bg-[#FFF8F8]"}`}>
                 <div className="flex items-center justify-between mb-4">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${doc.color}18` }}>
                     <doc.icon size={18} style={{ color: doc.color }} />
@@ -1170,23 +1384,23 @@ function VaultScreen() {
                   {ok ? (
                     <div className="flex gap-1.5">
                       {item!.url && (
-                        <a href={item!.url} target="_blank" rel="noreferrer" title="View" className="w-8 h-8 bg-[#F1F5F9] rounded-xl flex items-center justify-center hover:bg-[#E2E8F0] transition">
+                        <a href={item!.url} target="_blank" rel="noreferrer" title="View" className="w-8 h-8 bg-[#EEEAE2] rounded-xl flex items-center justify-center hover:bg-[#a7c3e7] transition">
                           <Eye size={13} className="text-[#64748B]" />
                         </a>
                       )}
-                      <button onClick={() => void remove({ id: item!._id })} title="Remove" className="w-8 h-8 bg-[#F1F5F9] rounded-xl flex items-center justify-center hover:bg-[#FEE2E2] transition">
+                      <button onClick={() => void remove({ id: item!._id })} title="Remove" className="w-8 h-8 bg-[#EEEAE2] rounded-xl flex items-center justify-center hover:bg-[#FEE2E2] transition">
                         <X size={13} className="text-[#64748B]" />
                       </button>
                     </div>
                   ) : (
-                    <span className="text-[9px] font-black bg-[#FEE2E2] text-[#EF4444] px-2 py-0.5 rounded-full tracking-widest">MISSING</span>
+                    <span className="text-sm font-bold bg-[#FEE2E2] text-[#FF6B6B] px-2 py-0.5 rounded-full">MISSING</span>
                   )}
                 </div>
-                <p className="font-bold text-[#0F172A] text-sm mb-0.5">{doc.label}</p>
+                <p className="font-bold text-[#0B192C] text-sm mb-0.5">{doc.label}</p>
                 <p className="text-xs text-[#64748B] mb-4">{doc.type}</p>
                 <div className="mt-auto flex items-center justify-between">
-                  <span className="text-[11px] text-[#94A3B8] font-mono">{ok ? "Uploaded" : "Not uploaded"}</span>
-                  <label className={`flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg cursor-pointer transition ${ok ? "bg-[#F1F5F9] text-[#64748B] hover:bg-[#E2E8F0]" : "bg-[#0EA5E9] text-white hover:bg-[#0284C7]"}`}>
+                  <span className="text-sm text-[#94A3B8]">{ok ? "Uploaded" : "Not uploaded"}</span>
+                  <label className={`flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-lg cursor-pointer transition ${ok ? "bg-[#EEEAE2] text-[#64748B] hover:bg-[#a7c3e7]" : "bg-[#0284C7] text-[#faf9f7] hover:bg-[#0B192C]"}`}>
                     <Upload size={11} /> {isUp ? "Uploading…" : ok ? "Replace" : "Upload"}
                     <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" disabled={isUp}
                       onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, doc); e.target.value = ""; }} />
@@ -1200,26 +1414,26 @@ function VaultScreen() {
         {/* Other uploaded documents */}
         {extras.length > 0 && (
           <div>
-            <p className="font-bold text-[#0F172A] text-sm mb-3">Other documents</p>
+            <p className="font-bold text-[#0B192C] text-sm mb-3">Other documents</p>
             <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
               {extras.map((item) => (
-                <div key={item._id} className="bg-white rounded-2xl p-5 border border-[rgba(15,23,42,0.06)] flex flex-col">
+                <div key={item._id} className="bg-[#faf9f7] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)] flex flex-col">
                   <div className="flex items-center justify-between mb-4">
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#64748B18" }}>
                       <FileText size={18} style={{ color: "#64748B" }} />
                     </div>
                     <div className="flex gap-1.5">
                       {item.url && (
-                        <a href={item.url} target="_blank" rel="noreferrer" title="View" className="w-8 h-8 bg-[#F1F5F9] rounded-xl flex items-center justify-center hover:bg-[#E2E8F0] transition">
+                        <a href={item.url} target="_blank" rel="noreferrer" title="View" className="w-8 h-8 bg-[#EEEAE2] rounded-xl flex items-center justify-center hover:bg-[#a7c3e7] transition">
                           <Eye size={13} className="text-[#64748B]" />
                         </a>
                       )}
-                      <button onClick={() => void remove({ id: item._id })} title="Remove" className="w-8 h-8 bg-[#F1F5F9] rounded-xl flex items-center justify-center hover:bg-[#FEE2E2] transition">
+                      <button onClick={() => void remove({ id: item._id })} title="Remove" className="w-8 h-8 bg-[#EEEAE2] rounded-xl flex items-center justify-center hover:bg-[#FEE2E2] transition">
                         <X size={13} className="text-[#64748B]" />
                       </button>
                     </div>
                   </div>
-                  <p className="font-bold text-[#0F172A] text-sm mb-0.5 truncate">{item.label}</p>
+                  <p className="font-bold text-[#0B192C] text-sm mb-0.5 truncate">{item.label}</p>
                   <p className="text-xs text-[#64748B] capitalize">{item.category}</p>
                 </div>
               ))}
@@ -1228,9 +1442,9 @@ function VaultScreen() {
         )}
 
         {/* Upload any other document */}
-        <label className="flex items-center justify-center gap-3 w-full py-6 border-2 border-dashed border-[#CBD5E1] rounded-2xl text-[#64748B] font-semibold hover:border-[#0EA5E9] hover:text-[#0EA5E9] hover:bg-[#EFF6FF] transition-all group cursor-pointer">
-          <div className="w-10 h-10 bg-[#F1F5F9] group-hover:bg-[#DBEAFE] rounded-xl flex items-center justify-center transition-colors">
-            <Upload size={18} className="text-[#64748B] group-hover:text-[#0EA5E9] transition-colors" />
+        <label className="flex items-center justify-center gap-3 w-full py-6 border-2 border-dashed border-[#CBD5E1] rounded-2xl text-[#64748B] font-medium hover:border-[#0284C7] hover:text-[#0284C7] hover:bg-[#E0FBFD] transition-all group cursor-pointer">
+          <div className="w-10 h-10 bg-[#EEEAE2] group-hover:bg-[#DBEAFE] rounded-xl flex items-center justify-center transition-colors">
+            <Upload size={18} className="text-[#64748B] group-hover:text-[#0284C7] transition-colors" />
           </div>
           <div className="text-left">
             <p className="font-bold">Upload another document</p>
@@ -1250,7 +1464,7 @@ function ApprovalsScreen() {
   const [done, setDone] = useState<Set<string>>(new Set());
 
   const approvals = [
-    { id: "1", title: "Approve Hospital Selection",  urgency: "high" as const,   agent: "Hospital Agent",  color: "#0EA5E9", action: "Confirm Hospital",
+    { id: "1", title: "Approve Hospital Selection",  urgency: "high" as const,   agent: "Hospital Agent",  color: "#0284C7", action: "Confirm Hospital",
       detail: "Apollo Hospitals, Bandra is recommended for your father's Total Knee Replacement surgery. Star Health accepted, wait time 2 days, estimated out-of-pocket ₹28,000. Dr. Priya Sharma is available on Jul 14." },
     { id: "2", title: "Upload MRI Report",           urgency: "high" as const,   agent: "Document Agent",  color: "#F59E0B", action: "Upload Document",
       detail: "Insurance pre-authorization requires the MRI report dated Jun 25, 2025. This document is needed to proceed with the ₹5L coverage approval. Please upload it to the Document Vault." },
@@ -1269,18 +1483,19 @@ function ApprovalsScreen() {
 
   return (
     <>
-      <TopBar title="Approval Center" subtitle={remaining > 0 ? `Your decision needed on ${remaining} item${remaining !== 1 ? "s" : ""}` : "All approvals handled"} />
-      <div className="p-8">
+      <TopBar />
+      <div className="p-8 flex flex-col gap-6">
+        <PageIntro title="Approval Center" subtitle={remaining > 0 ? `Your decision needed on ${remaining} item${remaining !== 1 ? "s" : ""}` : "All approvals handled"} />
         <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 360px" }}>
           {/* Approval cards */}
           <div className="flex flex-col gap-4">
             {approvals.map((a) => {
               const approved = done.has(a.id);
               return (
-                <div key={a.id} className={`bg-white rounded-2xl p-6 border border-[rgba(15,23,42,0.06)] transition-all ${approved ? "opacity-50 scale-[0.99]" : ""}`}>
+                <div key={a.id} className={`bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)] transition-all ${approved ? "opacity-50 scale-[0.99]" : ""}`}>
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <span className={`text-[10px] font-black px-2.5 py-1 rounded-full tracking-wider ${a.urgency === "high" ? "bg-[#FEF2F2] text-[#EF4444]" : "bg-[#FFFBEB] text-[#D97706]"}`}>
+                      <span className={`text-xs font-medium px-3 py-1 rounded-full ${a.urgency === "high" ? "bg-[#FEF2F2] text-[#FF6B6B]" : "bg-[#FFFBEB] text-[#D97706]"}`}>
                         {a.urgency.toUpperCase()} PRIORITY
                       </span>
                       <span className="text-xs text-[#94A3B8] font-medium">Requested by {a.agent}</span>
@@ -1293,17 +1508,17 @@ function ApprovalsScreen() {
                     )}
                   </div>
 
-                  <h3 style={{ fontFamily: "'Outfit', sans-serif" }} className="text-xl font-bold text-[#0F172A] mb-2">{a.title}</h3>
-                  <p className="text-sm text-[#64748B] leading-relaxed mb-5">{a.detail}</p>
+                  <h3 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-xl font-medium text-[#0B192C] mb-2">{a.title}</h3>
+                  <p className="text-sm text-[#64748B] mb-5">{a.detail}</p>
 
                   {!approved ? (
                     <div className="flex gap-3">
                       <button onClick={() => setDone(new Set([...done, a.id]))}
-                        className="flex-1 py-3 rounded-xl font-bold text-white text-sm transition-all active:scale-95 hover:opacity-90"
+                        className="flex-1 py-3 rounded-xl font-bold text-[#faf9f7] text-sm transition-all active:scale-95 hover:opacity-90"
                         style={{ backgroundColor: a.color }}>
                         {a.action}
                       </button>
-                      <button className="px-6 py-3 rounded-xl font-bold text-sm text-[#64748B] bg-[#F1F5F9] hover:bg-[#E2E8F0] transition">
+                      <button className="px-6 py-3 rounded-xl font-bold text-sm text-[#64748B] bg-[#EEEAE2] hover:bg-[#a7c3e7] transition">
                         Decline
                       </button>
                     </div>
@@ -1320,24 +1535,24 @@ function ApprovalsScreen() {
 
           {/* History panel */}
           <div className="flex flex-col gap-4">
-            <div className="bg-white rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
-              <p className="font-bold text-[#0F172A] text-sm mb-4">Decision History</p>
+            <div className="bg-[#faf9f7] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
+              <p className="font-bold text-[#0B192C] text-sm mb-4">Decision History</p>
               <div className="flex flex-col gap-0">
                 {history.map((d, i) => (
                   <div key={i} className="flex items-center gap-3 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${d.approved ? "bg-[#F0FDF4]" : "bg-[#FEF2F2]"}`}>
-                      {d.approved ? <Check size={13} className="text-[#16A34A]" /> : <X size={13} className="text-[#EF4444]" />}
+                      {d.approved ? <Check size={13} className="text-[#16A34A]" /> : <X size={13} className="text-[#FF6B6B]" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-[#0F172A] leading-tight">{d.title}</p>
-                      <p className="text-[10px] text-[#94A3B8] mt-0.5 font-mono">{d.date}</p>
+                      <p className="text-sm font-medium text-[#0B192C]">{d.title}</p>
+                      <p className="text-sm text-[#94A3B8] mt-0.5">{d.date}</p>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="bg-[#F8FAFF] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
+            <div className="bg-[#F3F0EA] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
               <p className="text-xs font-bold text-[#64748B] mb-3">HOW THIS WORKS</p>
               <div className="flex flex-col gap-3">
                 {[
@@ -1346,10 +1561,10 @@ function ApprovalsScreen() {
                   { icon: Shield, text: "All approvals are logged and auditable" },
                 ].map((item, i) => (
                   <div key={i} className="flex items-start gap-3">
-                    <div className="w-7 h-7 bg-[#EFF6FF] rounded-lg flex items-center justify-center flex-shrink-0">
-                      <item.icon size={13} className="text-[#0EA5E9]" />
+                    <div className="w-7 h-7 bg-[#E0FBFD] rounded-lg flex items-center justify-center flex-shrink-0">
+                      <item.icon size={13} className="text-[#0284C7]" />
                     </div>
-                    <p className="text-xs text-[#64748B] leading-relaxed">{item.text}</p>
+                    <p className="text-xs text-[#64748B]">{item.text}</p>
                   </div>
                 ))}
               </div>
@@ -1379,15 +1594,16 @@ function VoiceScreen() {
 
   return (
     <>
-      <TopBar title="Voice Command" subtitle="Speak naturally — Astra will handle the rest" />
-      <div className="p-8">
+      <TopBar />
+      <div className="p-8 flex flex-col gap-6">
+        <PageIntro title="Voice Command" subtitle="Speak naturally - Astra will handle the rest" />
         <div className="grid gap-8" style={{ gridTemplateColumns: "1fr 1fr" }}>
           {/* Left: mic */}
-          <div className="bg-white rounded-3xl border border-[rgba(15,23,42,0.06)] flex flex-col items-center justify-center py-16 px-8">
+          <div className="bg-[#faf9f7] rounded-3xl border border-[rgba(15,23,42,0.06)] flex flex-col items-center justify-center py-16 px-8">
             {phase !== "launched" ? (
               <>
                 <div className="text-center mb-12">
-                  <h2 style={{ fontFamily: "'Outfit', sans-serif" }} className="text-3xl font-black text-[#0F172A] tracking-tight mb-2">
+                  <h2 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-3xl font-medium text-[#0B192C] mb-2">
                     {phase === "processing" ? "Launching your team…" : "Talk to Astra"}
                   </h2>
                   <p className="text-[#64748B]">
@@ -1400,25 +1616,25 @@ function VoiceScreen() {
                 <div className="relative mb-12" onClick={() => phase === "idle" && setPhase("listening")}>
                   {phase !== "idle" && (
                     <>
-                      <div className="absolute inset-0 rounded-full bg-[#0EA5E9]" style={{ animation: "ripple2 1.6s ease-out infinite", opacity: 0.12, transform: "scale(1.8)" }} />
-                      <div className="absolute inset-0 rounded-full bg-[#0EA5E9]" style={{ animation: "ripple2 1.6s ease-out 0.5s infinite", opacity: 0.08, transform: "scale(1.5)" }} />
+                      <div className="absolute inset-0 rounded-full bg-[#0284C7]" style={{ animation: "ripple2 1.6s ease-out infinite", opacity: 0.12, transform: "scale(1.8)" }} />
+                      <div className="absolute inset-0 rounded-full bg-[#0284C7]" style={{ animation: "ripple2 1.6s ease-out 0.5s infinite", opacity: 0.08, transform: "scale(1.5)" }} />
                     </>
                   )}
                   <button className={`relative w-36 h-36 rounded-full flex items-center justify-center shadow-2xl transition-all ${
-                    phase === "idle"       ? "bg-[#0F172A] cursor-pointer hover:scale-105 hover:shadow-3xl active:scale-95"
-                    : phase === "processing" ? "bg-[#14B8A6]"
-                    :                        "bg-[#0EA5E9]"
+                    phase === "idle"       ? "bg-[#0B192C] cursor-pointer hover:scale-105 hover:shadow-3xl active:scale-95"
+                    : phase === "processing" ? "bg-[#0284C7]"
+                    :                        "bg-[#0284C7]"
                   }`}>
                     {phase === "processing"
-                      ? <RefreshCw size={48} className="text-white animate-spin" />
-                      : <Mic size={48} className="text-white" />}
+                      ? <RefreshCw size={48} className="text-[#faf9f7] animate-spin" />
+                      : <Mic size={48} className="text-[#faf9f7]" />}
                   </button>
                 </div>
 
                 {phase === "listening" && (
                   <div className="flex items-center gap-[3px] h-14 mb-8">
                     {[...Array(36)].map((_, i) => (
-                      <div key={i} className="w-[3px] bg-[#0EA5E9] rounded-full"
+                      <div key={i} className="w-[3px] bg-[#0284C7] rounded-full"
                         style={{ animation: `waveBar2 0.7s ease-in-out ${i * 0.035}s infinite alternate`, minHeight: 3 }} />
                     ))}
                   </div>
@@ -1426,14 +1642,14 @@ function VoiceScreen() {
 
                 {phase === "idle" && (
                   <div className="flex flex-col gap-2.5 w-full max-w-sm">
-                    <p className="text-xs text-[#94A3B8] font-semibold tracking-wider text-center mb-1">TRY SAYING</p>
+                    <p className="text-xs text-[#94A3B8] font-medium text-center mb-1">TRY SAYING</p>
                     {[
                       "\"My father needs knee surgery\"",
                       "\"Book a diabetes specialist in Mumbai\"",
                       "\"Check my insurance coverage for cardiac care\"",
                     ].map((phrase) => (
                       <button key={phrase} onClick={() => setPhase("listening")}
-                        className="text-sm text-[#64748B] bg-[#F8FAFF] border border-[rgba(15,23,42,0.08)] rounded-xl px-5 py-3 text-left hover:border-[#0EA5E9] hover:text-[#0EA5E9] hover:bg-[#EFF6FF] transition-all font-medium">
+                        className="text-sm text-[#64748B] bg-[#F3F0EA] border border-[rgba(15,23,42,0.08)] rounded-xl px-5 py-3 text-left hover:border-[#0284C7] hover:text-[#0284C7] hover:bg-[#E0FBFD] transition-all font-medium">
                         {phrase}
                       </button>
                     ))}
@@ -1444,18 +1660,18 @@ function VoiceScreen() {
               <div className="w-full" style={{ animation: "fadeUp2 0.4s ease-out" }}>
                 <div className="flex items-center gap-2 mb-2">
                   <PulseDot size="md" />
-                  <span className="text-xs font-black text-[#0EA5E9] tracking-widest">ASTRA LAUNCHED</span>
+                  <span className="text-xs font-bold text-[#0284C7]">ASTRA LAUNCHED</span>
                 </div>
-                <h2 style={{ fontFamily: "'Outfit', sans-serif" }} className="text-2xl font-black text-[#0F172A] tracking-tight mb-1">Journey Created</h2>
+                <h2 style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }} className="text-2xl font-medium text-[#0B192C] mb-1">Journey Created</h2>
                 <p className="text-sm text-[#64748B] mb-6">"My father needs knee surgery" → 6-stage journey initiated</p>
 
-                <div className="rounded-2xl p-5 text-white mb-5" style={{ background: "linear-gradient(135deg,#0EA5E9,#14B8A6)" }}>
-                  <p className="text-xs opacity-70 font-black tracking-widest mb-1">ASTRA UNDERSTOOD</p>
-                  <p className="font-black text-lg">Father · Knee Surgery Journey</p>
+                <div className="rounded-2xl p-5 text-[#faf9f7] mb-5" style={{ background: "linear-gradient(135deg,#0284C7,#0284C7)" }}>
+                  <p className="text-xs opacity-70 font-bold mb-1">ASTRA UNDERSTOOD</p>
+                  <p className="font-bold text-lg">Father · Knee Surgery Journey</p>
                   <p className="text-sm opacity-75">6 agents deployed · Running autonomously</p>
                 </div>
 
-                <button onClick={() => setPhase("idle")} className="w-full py-3 rounded-xl border border-[rgba(15,23,42,0.08)] text-sm font-semibold text-[#64748B] hover:bg-[#F8FAFF] transition">
+                <button onClick={() => setPhase("idle")} className="w-full py-3 rounded-xl border border-[rgba(15,23,42,0.08)] text-sm font-medium text-[#64748B] hover:bg-[#F3F0EA] transition">
                   Try another command
                 </button>
               </div>
@@ -1466,21 +1682,21 @@ function VoiceScreen() {
           <div className="flex flex-col gap-4">
             {phase === "launched" ? (
               <>
-                <p className="font-bold text-[#0F172A]">Agents Deployed</p>
+                <p className="font-bold text-[#0B192C]">Agents Deployed</p>
                 {[
-                  { agent: "Planner Agent",   action: "Creating 6-stage surgery journey plan",          color: "#0EA5E9" },
+                  { agent: "Planner Agent",   action: "Creating 6-stage surgery journey plan",          color: "#0284C7" },
                   { agent: "Insurance Agent", action: "Scanning Star Health policy for TKR coverage",   color: "#8B5CF6" },
-                  { agent: "Hospital Agent",  action: "Searching TKR specialists within 10 km",         color: "#14B8A6" },
+                  { agent: "Hospital Agent",  action: "Searching TKR specialists within 10 km",         color: "#0284C7" },
                   { agent: "Document Agent",  action: "Identifying 7 required documents for surgery",   color: "#F59E0B" },
                   { agent: "Claim Agent",     action: "Preparing post-surgery claim framework",         color: "#64748B" },
                   { agent: "Notification Agent", action: "Setting up patient & hospital communication", color: "#16A34A" },
                 ].map((a, i) => (
-                  <div key={i} className="bg-white rounded-xl p-4 border border-[rgba(15,23,42,0.06)] flex items-center gap-3" style={{ animation: `fadeUp2 ${0.3 + i * 0.1}s ease-out` }}>
+                  <div key={i} className="bg-[#faf9f7] rounded-xl p-4 border border-[rgba(15,23,42,0.06)] flex items-center gap-3" style={{ animation: `fadeUp2 ${0.3 + i * 0.1}s ease-out` }}>
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${a.color}18` }}>
                       <Bot size={16} style={{ color: a.color }} />
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-bold text-[#0F172A]">{a.agent}</p>
+                      <p className="text-sm font-bold text-[#0B192C]">{a.agent}</p>
                       <p className="text-xs text-[#64748B]">{a.action}</p>
                     </div>
                     <PulseDot color={a.color} />
@@ -1489,33 +1705,33 @@ function VoiceScreen() {
               </>
             ) : (
               <>
-                <div className="bg-white rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
-                  <p className="font-bold text-[#0F172A] mb-4">How Voice Works</p>
+                <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
+                  <p className="font-bold text-[#0B192C] mb-4">How Voice Works</p>
                   <div className="flex flex-col gap-4">
                     {[
-                      { step: "1", title: "You speak",     desc: "Say what your patient needs in plain language — no commands required",        color: "#0EA5E9" },
+                      { step: "1", title: "You speak",     desc: "Say what your patient needs in plain language — no commands required",        color: "#0284C7" },
                       { step: "2", title: "Astra parses",  desc: "AI extracts intent, patient, condition, and urgency from your statement",    color: "#8B5CF6" },
-                      { step: "3", title: "Team deploys",  desc: "6 specialist agents are automatically assigned and begin working instantly", color: "#14B8A6" },
+                      { step: "3", title: "Team deploys",  desc: "6 specialist agents are automatically assigned and begin working instantly", color: "#0284C7" },
                       { step: "4", title: "You watch",     desc: "The dashboard transforms into your healthcare execution center",              color: "#F59E0B" },
                     ].map((s) => (
                       <div key={s.step} className="flex items-start gap-4">
-                        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 font-black text-sm text-white" style={{ backgroundColor: s.color }}>
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-sm text-[#faf9f7]" style={{ backgroundColor: s.color }}>
                           {s.step}
                         </div>
                         <div>
-                          <p className="font-bold text-[#0F172A] text-sm">{s.title}</p>
-                          <p className="text-xs text-[#64748B] leading-relaxed">{s.desc}</p>
+                          <p className="font-bold text-[#0B192C] text-sm">{s.title}</p>
+                          <p className="text-xs text-[#64748B]">{s.desc}</p>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="bg-[#F8FAFF] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
-                  <p className="text-xs font-bold text-[#94A3B8] tracking-wider mb-3">SUPPORTED CONDITIONS</p>
+                <div className="bg-[#F3F0EA] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
+                  <p className="text-xs font-bold text-[#94A3B8] mb-3">SUPPORTED CONDITIONS</p>
                   <div className="flex flex-wrap gap-2">
                     {["Knee Surgery", "Heart Surgery", "Cancer Care", "Diabetes Management", "Maternity", "Physiotherapy", "Eye Surgery", "Neurology"].map((tag) => (
-                      <span key={tag} className="text-xs font-semibold bg-white border border-[rgba(15,23,42,0.08)] text-[#64748B] px-3 py-1.5 rounded-full">{tag}</span>
+                      <span key={tag} className="text-xs font-medium bg-[#faf9f7] border border-[rgba(15,23,42,0.08)] text-[#64748B] px-3 py-1.5 rounded-full">{tag}</span>
                     ))}
                   </div>
                 </div>
@@ -1532,7 +1748,7 @@ function VoiceScreen() {
 
 // "Scan inbox" — pulls every email from the last 30 days whose subject starts
 // with "Health Report" (Gmail); each becomes a candidate journey to choose from.
-function ScanInboxButton({ variant = "solid" }: { variant?: "solid" | "ghost" }) {
+function ScanInboxButton({ variant = "solid" }: { variant?: "solid" | "ghost" | "sidebar" }) {
   const scan = useAction(api.inbox.scanInbox);
   const resetDemo = useMutation(api.inbox.resetDemoData);
   const [busy, setBusy] = useState(false);
@@ -1571,16 +1787,18 @@ function ScanInboxButton({ variant = "solid" }: { variant?: "solid" | "ghost" })
 
   const cls =
     variant === "solid"
-      ? "bg-[#0EA5E9] text-white hover:bg-[#0284C7]"
-      : "bg-white border border-[rgba(15,23,42,0.1)] text-[#0F172A] hover:bg-[#F1F5F9]";
+      ? "bg-[#0284C7] text-[#faf9f7] hover:bg-[#0B192C]"
+      : variant === "sidebar"
+        ? "bg-[#0B192C] text-[#faf9f7] hover:bg-[#0284C7]"
+        : "bg-[#faf9f7] border border-[rgba(15,23,42,0.1)] text-[#0B192C] hover:bg-[#EEEAE2]";
 
   return (
-    <div className={`flex flex-col gap-1.5 ${variant === "ghost" ? "items-end" : "items-center"}`}>
-      <div className="flex items-center gap-2">
+    <div className={`flex flex-col gap-1.5 ${variant === "ghost" ? "items-end" : variant === "sidebar" ? "items-stretch" : "items-center"}`}>
+      <div className={`flex items-center gap-2 ${variant === "sidebar" ? "flex-col" : ""}`}>
         <button
           onClick={run}
           disabled={busy || resetting}
-          className={`flex items-center gap-2 text-xs font-bold px-4 py-2.5 rounded-xl transition disabled:opacity-60 ${cls}`}
+          className={`micro-button-pad flex items-center justify-center gap-2 text-xs font-medium rounded-xl transition disabled:opacity-60 ${variant === "sidebar" ? "w-full" : ""} ${cls}`}
         >
           <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
           {busy ? "Scanning inbox…" : "Scan inbox"}
@@ -1589,13 +1807,13 @@ function ScanInboxButton({ variant = "solid" }: { variant?: "solid" | "ghost" })
           onClick={reset}
           disabled={busy || resetting}
           title="Clear ingested reports & dismissed candidates so a fresh scan re-surfaces them (demo)"
-          className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-2.5 rounded-xl transition disabled:opacity-60 text-[#94A3B8] bg-transparent hover:bg-[#F1F5F9] hover:text-[#64748B]"
+          className={`micro-button-pad flex items-center justify-center gap-1.5 text-sm font-medium rounded-xl transition disabled:opacity-60 text-[#94A3B8] bg-transparent hover:bg-[#EEEAE2] hover:text-[#64748B] ${variant === "sidebar" ? "w-full" : ""}`}
         >
           <RotateCcw size={13} className={resetting ? "animate-spin" : ""} />
           {resetting ? "Resetting…" : "Reset demo"}
         </button>
       </div>
-      {msg && <p className="text-[11px] text-[#64748B]">{msg}</p>}
+      {msg && <p className="text-sm text-[#64748B]">{msg}</p>}
     </div>
   );
 }
@@ -1618,17 +1836,17 @@ function SuggestionModal() {
   const multiple = entries.length > 1;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: "rgba(15,23,42,0.45)" }}>
-      <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden" style={{ animation: "fadeUp2 0.25s ease" }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(15,23,42,0.45)" }}>
+      <div className="scrollbar-none w-full max-w-lg max-h-[calc(100dvh-3rem)] bg-[#faf9f7] rounded-3xl shadow-2xl overflow-y-auto" style={{ animation: "fadeUp2 0.25s ease" }}>
         {/* Header */}
-        <div className="p-6 text-white" style={{ background: "linear-gradient(135deg,#0284C7,#0EA5E9 45%,#14B8A6)" }}>
+        <div className="p-6 text-[#faf9f7]" style={{ background: "linear-gradient(135deg,#0B192C,#0284C7 45%,#0284C7)" }}>
           <div className="flex items-center gap-2 mb-2">
-            <PulseDot color="white" />
-            <span className="text-[11px] font-black tracking-widest opacity-90">
+            <PulseDot color="#faf9f7" />
+            <span className="text-sm font-bold opacity-90">
               {multiple ? `${entries.length} CARE OPTIONS DETECTED` : "NEW HEALTH REPORT DETECTED"}
             </span>
           </div>
-          <h2 className="text-2xl font-black tracking-tight" style={{ fontFamily: "'Outfit', sans-serif" }}>
+          <h2 className="text-2xl font-medium" style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }}>
             {report?.patientName ? `${report.patientName} · ` : ""}{report?.condition ?? "Report"}
           </h2>
           {email && <p className="text-xs opacity-80 mt-1">From {email.from} · {email.subject}</p>}
@@ -1636,8 +1854,8 @@ function SuggestionModal() {
 
         {/* Candidate selector — only when more than one report is pending. */}
         {multiple && (
-          <div className="px-6 pt-4">
-            <p className="text-[11px] font-black text-[#94A3B8] tracking-widest mb-2">
+          <div className="px-4 pt-4">
+            <p className="text-sm font-bold text-[#94A3B8] mb-2">
               CHOOSE A JOURNEY TO START
             </p>
             <div className="flex flex-col gap-2 max-h-40 overflow-y-auto">
@@ -1649,14 +1867,14 @@ function SuggestionModal() {
                     onClick={() => setSelectedId(e.plan._id)}
                     className={`text-left px-3 py-2.5 rounded-xl border transition ${
                       active
-                        ? "border-[#0EA5E9] bg-[#F0F9FF]"
-                        : "border-[rgba(15,23,42,0.1)] bg-white hover:bg-[#F8FAFF]"
+                        ? "border-[#0284C7] bg-[#E0FBFD]"
+                        : "border-[rgba(15,23,42,0.1)] bg-[#faf9f7] hover:bg-[#F3F0EA]"
                     }`}
                   >
-                    <p className="text-sm font-bold text-[#0F172A] truncate">
+                    <p className="text-sm font-bold text-[#0B192C] truncate">
                       {e.plan.recommendedProcedure}
                     </p>
-                    <p className="text-[11px] text-[#64748B] truncate">
+                    <p className="text-sm text-[#64748B] truncate">
                       {e.report?.patientName ? `${e.report.patientName} · ` : ""}
                       {e.report?.condition ?? e.plan.summary}
                       {e.plan.estCostInr ? ` · ${inr(e.plan.estCostInr)}` : ""}
@@ -1669,33 +1887,33 @@ function SuggestionModal() {
         )}
 
         {/* Body */}
-        <div className="p-6 flex flex-col gap-4">
+        <div className="p-4 flex flex-col gap-4">
           <div>
-            <p className="text-[11px] font-black text-[#94A3B8] tracking-widest mb-1">DIAGNOSIS</p>
-            <p className="text-sm text-[#0F172A]">{report?.diagnosis ?? plan.summary}</p>
+            <p className="text-sm font-bold text-[#94A3B8] mb-1">DIAGNOSIS</p>
+            <p className="text-sm text-[#0B192C]">{report?.diagnosis ?? plan.summary}</p>
           </div>
-          <div className="bg-[#F0F9FF] rounded-2xl p-4 border border-[#BAE6FD]">
+          <div className="bg-[#E0FBFD] rounded-2xl p-4 border border-[#B6F4FA]">
             <div className="flex items-center gap-2 mb-1.5">
-              <Bot size={15} className="text-[#0EA5E9]" />
-              <p className="text-[11px] font-black text-[#0EA5E9] tracking-widest">ASTRA RECOMMENDS</p>
+              <Bot size={15} className="text-[#0284C7]" />
+              <p className="text-sm font-bold text-[#0284C7]">ASTRA RECOMMENDS</p>
             </div>
-            <p className="font-bold text-[#0F172A]">{plan.recommendedProcedure}</p>
+            <p className="font-bold text-[#0B192C]">{plan.recommendedProcedure}</p>
             <p className="text-xs text-[#64748B] mt-1">{plan.summary}</p>
             <div className="flex gap-4 mt-3">
               {plan.estCostInr ? (
                 <div>
-                  <p className="text-[10px] text-[#94A3B8] font-semibold">EST. COST</p>
-                  <p className="text-sm font-black text-[#0F172A]">{inr(plan.estCostInr)}</p>
+                  <p className="text-sm text-[#94A3B8] font-medium">EST. COST</p>
+                  <p className="text-sm font-bold text-[#0B192C]">{inr(plan.estCostInr)}</p>
                 </div>
               ) : null}
               <div className="flex-1">
-                <p className="text-[10px] text-[#94A3B8] font-semibold">COVERAGE</p>
-                <p className="text-xs text-[#0F172A]">{plan.coverageNote}</p>
+                <p className="text-sm text-[#94A3B8] font-medium">COVERAGE</p>
+                <p className="text-xs text-[#0B192C]">{plan.coverageNote}</p>
               </div>
             </div>
           </div>
 
-          <p className="text-[11px] text-[#94A3B8] leading-relaxed">
+          <p className="text-sm text-[#94A3B8]">
             Approving starts an autonomous journey — Astra's agents will coordinate hospitals,
             insurance pre-auth and documents. You stay in control and approve key decisions.
           </p>
@@ -1704,15 +1922,15 @@ function SuggestionModal() {
             <button
               onClick={async () => { setBusy(true); try { await reject({ id: plan._id }); } finally { setBusy(false); } }}
               disabled={busy}
-              className="flex-1 py-3 rounded-xl text-sm font-bold text-[#64748B] bg-[#F1F5F9] hover:bg-[#E2E8F0] transition disabled:opacity-60"
+              className="flex-1 py-3 rounded-xl text-sm font-bold text-[#64748B] bg-[#EEEAE2] hover:bg-[#a7c3e7] transition disabled:opacity-60"
             >
               Dismiss
             </button>
             <button
               onClick={async () => { setBusy(true); try { await approve({ id: plan._id }); } finally { setBusy(false); } }}
               disabled={busy}
-              className="flex-[2] py-3 rounded-xl text-sm font-bold text-white transition disabled:opacity-60 flex items-center justify-center gap-2"
-              style={{ background: "linear-gradient(135deg,#0EA5E9,#14B8A6)" }}
+              className="flex-[2] py-3 rounded-xl text-sm font-bold text-[#faf9f7] transition disabled:opacity-60 flex items-center justify-center gap-2"
+              style={{ background: "linear-gradient(135deg,#0284C7,#0284C7)" }}
             >
               <Check size={15} /> {busy ? "Starting…" : "Approve & Start Journey"}
             </button>
@@ -1725,15 +1943,19 @@ function SuggestionModal() {
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const navigate = (nextScreen: Screen) => {
+    setScreen(nextScreen);
+    if (typeof window !== "undefined" && window.innerWidth <= 767) {
+      setSidebarCollapsed(true);
+    }
+  };
 
   return (
-    <>
+    <SidebarControlsContext.Provider value={{ collapsed: sidebarCollapsed, toggle: () => setSidebarCollapsed((value) => !value) }}>
+      <>
       <style>{`
-        * { font-family: "Plus Jakarta Sans", system-ui, sans-serif; }
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(15,23,42,0.12); border-radius: 99px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(15,23,42,0.22); }
+        * { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
 
         @keyframes waveBar2 {
           from { height: 3px; }
@@ -1749,10 +1971,21 @@ export default function App() {
         }
       `}</style>
 
-      <div className="flex h-screen overflow-hidden bg-[#F8FAFF]">
-        <Sidebar screen={screen} onNavigate={setScreen} />
-        <main className="flex-1 overflow-y-auto">
-          {screen === "home"      && <HomeScreen onNavigate={setScreen} />}
+      <div className="responsive-shell flex h-screen overflow-hidden bg-[#F3F0EA]">
+        <Sidebar
+          screen={screen}
+          onNavigate={navigate}
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((value) => !value)}
+        />
+        <button
+          type="button"
+          className="responsive-sidebar-backdrop"
+          aria-label="Close sidebar"
+          onClick={() => setSidebarCollapsed(true)}
+        />
+        <main className="responsive-main flex-1 overflow-y-auto">
+          {screen === "home"      && <HomeScreen onNavigate={navigate} />}
           {screen === "agents"    && <AgentsScreen />}
           {screen === "timeline"  && <TimelineScreen />}
           {screen === "hospitals" && <HospitalsScreen />}
@@ -1764,6 +1997,7 @@ export default function App() {
       </div>
 
       <SuggestionModal />
-    </>
+      </>
+    </SidebarControlsContext.Provider>
   );
 }
