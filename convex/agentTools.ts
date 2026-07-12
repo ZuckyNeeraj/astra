@@ -14,7 +14,9 @@ import { Doc, Id } from "./_generated/dataModel";
 // user), so they do NOT call getAuthUserId.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const REQUIRED_LABELS = ["Insurance Policy", "Aadhaar Card", "PAN Card", "Doctor's Prescription"];
+// Docs the user uploads to the vault. The Doctor's Prescription comes from the
+// ingested Health Report email, so it is counted separately (not an upload).
+const REQUIRED_UPLOADS = ["Insurance Policy", "Aadhaar Card", "PAN Card"];
 const SEED_STAGES = [
   "Doctor Consultation", "Insurance Pre-Auth", "Hospital Booking",
   "Surgery", "Recovery & Rehab", "Claim Filing",
@@ -67,7 +69,9 @@ export const startJourneyFromPlan = mutation({
       .query("vaultItems")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
-    const documentsReady = REQUIRED_LABELS.filter((l) => vault.some((vi) => vi.label === l)).length;
+    const uploadsPresent = REQUIRED_UPLOADS.filter((l) => vault.some((vi) => vi.label === l)).length;
+    const documentsTotal = REQUIRED_UPLOADS.length + 1;                 // +1 = prescription from email
+    const documentsReady = uploadsPresent + (report ? 1 : 0);
 
     // Seed coverage + policy from the REAL parsed insurance document, when present
     // (the Health Vault agent extracts sumInsuredInr / insurer). No fake defaults —
@@ -92,7 +96,7 @@ export const startJourneyFromPlan = mutation({
       progress: 5,
       coverageLeftInr,
       documentsReady,
-      documentsTotal: REQUIRED_LABELS.length,
+      documentsTotal,
       ownerName: "You",
       status: "active",
     });
@@ -221,15 +225,25 @@ export const readVault = query({
   args: { journeyId: v.id("journeys") },
   handler: async (ctx, { journeyId }) => {
     const journey = await ctx.db.get(journeyId);
-    if (!journey) return { present: [], missing: REQUIRED_LABELS, documents: [] };
+    if (!journey) return { present: [], missing: REQUIRED_UPLOADS, documents: [] };
     const items = await ctx.db
       .query("vaultItems")
       .withIndex("by_user", (q) => q.eq("userId", journey.userId))
       .collect();
     const labels = new Set(items.map((i) => i.label));
+    // The Doctor's Prescription comes from the ingested Health Report email —
+    // present when this journey has a linked report.
+    const report = await ctx.db
+      .query("reports")
+      .withIndex("by_user", (q) => q.eq("userId", journey.userId))
+      .first();
+    const present = REQUIRED_UPLOADS.filter((l) => labels.has(l));
+    const missing = REQUIRED_UPLOADS.filter((l) => !labels.has(l));
+    if (report) present.push("Doctor's Prescription (from email)");
+    else missing.push("Doctor's Prescription");
     return {
-      present: REQUIRED_LABELS.filter((l) => labels.has(l)),
-      missing: REQUIRED_LABELS.filter((l) => !labels.has(l)),
+      present,
+      missing,
       documents: items.map((i) => ({
         label: i.label,
         category: i.category,

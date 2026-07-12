@@ -1304,11 +1304,12 @@ function InsuranceScreen() {
 // ── Screen 6: Vault ─────────────────────────────────────────────────────────
 
 // The must-have documents for the demo journey.
+// Docs the user uploads. The Doctor's Prescription is NOT here — it comes from
+// the Health Report email automatically (shown as an info note below).
 const REQUIRED_DOCS = [
   { label: "Insurance Policy",      type: "Insurance",     category: "insurance", icon: Shield,      color: "#0284C7" },
   { label: "Aadhaar Card",          type: "Government ID", category: "identity",  icon: ShieldCheck, color: "#8B5CF6" },
   { label: "PAN Card",              type: "Government ID", category: "identity",  icon: CreditCard,  color: "#0284C7" },
-  { label: "Doctor's Prescription", type: "Prescription",  category: "medical",   icon: Stethoscope, color: "#F59E0B" },
 ];
 
 // Pretty labels for what the Health Vault agent classified a document as.
@@ -1467,6 +1468,17 @@ function VaultScreen() {
               </div>
             );
           })}
+        </div>
+
+        {/* Doctor's Prescription comes from the Health Report email, not uploaded */}
+        <div className="flex items-center gap-3 bg-[#F0FDF4] rounded-2xl px-5 py-3.5 border border-[#D1FAE5]">
+          <div className="w-9 h-9 rounded-xl bg-[#DCFCE7] flex items-center justify-center">
+            <Stethoscope size={16} className="text-[#16A34A]" />
+          </div>
+          <div>
+            <p className="font-bold text-[#0B192C] text-sm">Doctor's Prescription — from your Health Report email</p>
+            <p className="text-[11px] text-[#64748B]">Pulled automatically from the emailed report; no upload needed.</p>
+          </div>
         </div>
 
         {/* Other uploaded documents */}

@@ -3,7 +3,9 @@ import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { Id } from "./_generated/dataModel";
 
-const REQUIRED_LABELS = ["Insurance Policy", "Aadhaar Card", "PAN Card", "Doctor's Prescription"];
+// Documents the user uploads to the vault. The Doctor's Prescription is NOT here
+// — it comes from the ingested Health Report email (counted separately below).
+const REQUIRED_UPLOADS = ["Insurance Policy", "Aadhaar Card", "PAN Card"];
 const DEFAULT_STAGES = [
   "Doctor Consultation", "Insurance Pre-Auth", "Hospital Booking",
   "Surgery", "Recovery & Rehab", "Claim Filing",
@@ -51,7 +53,12 @@ async function startApprovedJourney(
       .query("vaultItems")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
-    const documentsReady = REQUIRED_LABELS.filter((l) => vault.some((vi) => vi.label === l)).length;
+    // Uploaded required docs + the prescription, which the Health Report email
+    // provides (so it's counted present whenever this plan came from a report).
+    const uploadsPresent = REQUIRED_UPLOADS.filter((l) => vault.some((vi) => vi.label === l)).length;
+    const prescriptionFromEmail = !!report;
+    const documentsTotal = REQUIRED_UPLOADS.length + 1;
+    const documentsReady = uploadsPresent + (prescriptionFromEmail ? 1 : 0);
 
     const policyDoc = vault.find((vi) => vi.docKind === "insurance_policy");
     const medicalDoc = vault.find((vi) => vi.docKind === "medical_report");
@@ -64,8 +71,8 @@ async function startApprovedJourney(
 
     console.log(
       `[approve] journey for user=${userId} plan=${plan.recommendedProcedure} | vault: ${vault.length} items, ` +
-      `${documentsReady}/${REQUIRED_LABELS.length} required present | policyDoc=${!!policyDoc} ` +
-      `insurer=${policyDoc?.extractedFields?.insurer ?? "-"} sumInsured=${coverageLeftInr} | medicalDoc=${!!medicalDoc}`,
+      `docs ${documentsReady}/${documentsTotal} (uploads ${uploadsPresent}/${REQUIRED_UPLOADS.length}, prescription-from-email=${prescriptionFromEmail}) | ` +
+      `policyDoc=${!!policyDoc} insurer=${policyDoc?.extractedFields?.insurer ?? "-"} sumInsured=${coverageLeftInr} | medicalDoc=${!!medicalDoc}`,
     );
 
     const patientName = report?.patientName ?? "Patient";
@@ -80,7 +87,7 @@ async function startApprovedJourney(
       progress: 8,
       coverageLeftInr,
       documentsReady,
-      documentsTotal: REQUIRED_LABELS.length,
+      documentsTotal,
       ownerName: "You",
       status: "active",
     });
@@ -118,10 +125,17 @@ async function startApprovedJourney(
         kind: "info", createdAt: Date.now() + 2,
       });
     }
+    if (prescriptionFromEmail) {
+      await ctx.db.insert("activity", {
+        journeyId, agentName: "Health Vault Agent",
+        message: `Doctor's prescription taken from the Health Report email`,
+        kind: "info", createdAt: Date.now() + 3,
+      });
+    }
     await ctx.db.insert("activity", {
       journeyId, agentName: "Health Vault Agent",
-      message: `Documents ready: ${documentsReady}/${REQUIRED_LABELS.length} required uploaded`,
-      kind: documentsReady === REQUIRED_LABELS.length ? "success" : "warning", createdAt: Date.now() + 3,
+      message: `Documents ready: ${documentsReady}/${documentsTotal} (${uploadsPresent} uploaded + prescription from email)`,
+      kind: documentsReady === documentsTotal ? "success" : "warning", createdAt: Date.now() + 4,
     });
 
     // Mark the plan approved and link everything to the new journey.
