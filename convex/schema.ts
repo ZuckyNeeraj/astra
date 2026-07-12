@@ -230,6 +230,38 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_journey", ["journeyId"]),
 
+  // ── Evaluation & iteration ──────────────────────────────────────────────────
+  // Closed loop: real failures (human rejections, agent errors, manual flags)
+  // become eval cases; the suite is scored per prompt/agent version so quality
+  // is measurable across versions.
+  evalCases: defineTable({
+    title: v.string(),
+    source: v.union(
+      v.literal("human_rejection"), // a human rejected an agent's proposal
+      v.literal("agent_error"),      // an agent errored / produced no output
+      v.literal("manual"),           // flagged by a person
+    ),
+    agentName: v.string(),
+    context: v.string(),             // what the agent saw / the situation
+    issue: v.string(),               // what went wrong
+    expected: v.string(),            // the correct behaviour
+    journeyId: v.optional(v.id("journeys")), // traceability to the real run
+    capturedInVersion: v.string(),   // the version live when it was captured
+    status: v.union(v.literal("open"), v.literal("resolved")),
+    createdAt: v.number(),
+  }).index("by_status", ["status"]),
+
+  // One scored result of a case under a given version (from the eval runner).
+  evalResults: defineTable({
+    caseId: v.id("evalCases"),
+    version: v.string(),
+    passed: v.boolean(),
+    note: v.optional(v.string()),
+    ranAt: v.number(),
+  })
+    .index("by_version", ["version"])
+    .index("by_case", ["caseId"]),
+
   // Payments made through the product (Dodo deposits / co-pays).
   payments: defineTable({
     userId: v.id("users"),

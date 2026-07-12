@@ -57,7 +57,7 @@ function timeGreeting(date = new Date()): string {
 
 type Screen =
   | "home" | "agents" | "timeline" | "hospitals"
-  | "insurance" | "vault" | "approvals" | "voice";
+  | "insurance" | "vault" | "approvals" | "voice" | "evals";
 
 const SidebarControlsContext = createContext<{
   collapsed: boolean;
@@ -154,6 +154,7 @@ const NAV_ITEMS = [
   { id: "vault"     as Screen, icon: FolderOpen,  label: "Document Vault",     group: "journey"  },
   { id: "approvals" as Screen, icon: CheckSquare, label: "Approval Center",    group: "journey"  },
   { id: "voice"     as Screen, icon: Mic,         label: "Voice Command",      group: "tools"    },
+  { id: "evals"     as Screen, icon: TrendingUp,  label: "Evaluation",         group: "tools"    },
 ];
 
 function Sidebar({
@@ -1737,6 +1738,119 @@ function VoiceScreen() {
   );
 }
 
+// ── Screen 9: Evaluation & Iteration ────────────────────────────────────────
+
+const EVAL_SOURCE: Record<string, { label: string; cls: string }> = {
+  human_rejection: { label: "HUMAN REJECTION", cls: "bg-[#FEF2F2] text-[#FF6B6B]" },
+  agent_error:     { label: "AGENT ERROR",     cls: "bg-[#FFFBEB] text-[#D97706]" },
+  manual:          { label: "FLAGGED",         cls: "bg-[#EFF6FF] text-[#0284C7]" },
+};
+
+function EvalsScreen() {
+  const stats = useQuery(api.evals.stats);
+  const cases = useQuery(api.evals.list);
+  const runSuiteAction = useAction(api.evals.runSuite);
+  const [running, setRunning] = useState(false);
+
+  async function run() {
+    setRunning(true);
+    try { await runSuiteAction({}); } finally { setRunning(false); }
+  }
+
+  const chartData = (stats?.byVersion ?? []).map((v) => ({ version: v.version, passRate: v.passRate }));
+
+  return (
+    <>
+      <TopBar />
+      <div className="p-8 flex flex-col gap-6">
+        <PageIntro title="Evaluation & Iteration" subtitle="Real failures feed a growing eval set · prompts version-controlled in git · quality measured across versions" />
+
+        {/* Headline tiles */}
+        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+          {[
+            { label: "Current version", value: stats?.currentVersion ?? "—", color: "#0284C7" },
+            { label: "Eval cases", value: String(stats?.totalCases ?? 0), color: "#8B5CF6" },
+            { label: "Captured this version", value: String(stats?.capturedThisVersion ?? 0), color: "#F59E0B" },
+            { label: "Pass rate now", value: `${stats?.byVersion?.at(-1)?.passRate ?? 0}%`, color: "#16A34A" },
+          ].map((s) => (
+            <div key={s.label} className="bg-[#faf9f7] rounded-2xl p-4 border border-[rgba(15,23,42,0.06)]">
+              <p className="text-xs text-[#64748B] mb-1">{s.label}</p>
+              <p className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          {/* Pass-rate across versions */}
+          <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
+            <p className="font-bold text-[#0B192C] text-sm mb-4">Pass rate across versions</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={chartData} barSize={44}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.04)" vertical={false} />
+                <XAxis dataKey="version" tick={{ fontSize: 12, fill: "#64748B" }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "#94A3B8" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                <Tooltip formatter={(v: number) => [`${v}%`, "Pass rate"]} contentStyle={{ fontSize: 12, borderRadius: 12, border: "1px solid rgba(15,23,42,0.08)" }} />
+                <Bar dataKey="passRate" fill="#0284C7" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Version history (git-tagged) */}
+          <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
+            <p className="font-bold text-[#0B192C] text-sm mb-4">Version history — prompts tagged in git</p>
+            <div className="flex flex-col gap-3">
+              {(stats?.byVersion ?? []).map((v) => (
+                <div key={v.version} className="flex items-start gap-3">
+                  <span className="text-[10px] font-black bg-[#0B192C] text-[#faf9f7] px-2 py-1 rounded-lg font-mono flex-shrink-0">{v.tag}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-bold text-[#0B192C]">{v.version}</p>
+                      <span className="text-xs font-bold text-[#16A34A]">{v.passRate}%</span>
+                    </div>
+                    <p className="text-xs text-[#64748B] leading-snug">{v.summary}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* The eval set */}
+        <div className="bg-[#faf9f7] rounded-2xl p-6 border border-[rgba(15,23,42,0.06)]">
+          <div className="flex items-center justify-between mb-4">
+            <p className="font-bold text-[#0B192C] text-sm">Eval set — every failure becomes a case</p>
+            <button onClick={() => void run()} disabled={running}
+              className="flex items-center gap-1.5 text-[12px] font-bold px-3.5 py-2 rounded-lg bg-[#0284C7] text-[#faf9f7] hover:bg-[#0B192C] transition disabled:opacity-60">
+              <RefreshCw size={12} className={running ? "animate-spin" : ""} /> {running ? "Scoring…" : "Re-run eval suite"}
+            </button>
+          </div>
+          <div className="flex flex-col gap-3">
+            {(cases ?? []).length === 0 && <p className="text-sm text-[#94A3B8]">No eval cases yet.</p>}
+            {(cases ?? []).map((c) => {
+              const src = EVAL_SOURCE[c.source] ?? EVAL_SOURCE.manual;
+              return (
+                <div key={c._id} className="rounded-xl border border-[rgba(15,23,42,0.06)] p-4">
+                  <div className="flex items-center justify-between mb-1.5 gap-2">
+                    <p className="font-bold text-[#0B192C] text-sm">{c.title}</p>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full tracking-widest ${src.cls}`}>{src.label}</span>
+                      <span className="text-[9px] font-black px-2 py-0.5 rounded-full tracking-widest bg-[#F1F5F9] text-[#64748B]">{c.agentName}</span>
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full tracking-widest ${c.status === "open" ? "bg-[#FFFBEB] text-[#D97706]" : "bg-[#F0FDF4] text-[#16A34A]"}`}>{c.status.toUpperCase()}</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-[#64748B] mb-1"><span className="font-bold">Issue:</span> {c.issue}</p>
+                  <p className="text-xs text-[#64748B] mb-1"><span className="font-bold">Expected:</span> {c.expected}</p>
+                  <p className="text-[11px] text-[#94A3B8] font-mono">captured in {c.capturedInVersion}{c.journeyId ? " · traces to a real journey" : ""}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Main App ────────────────────────────────────────────────────────────────
 
 // "Scan inbox" — pulls every email from the last 30 days whose subject starts
@@ -1986,6 +2100,7 @@ export default function App() {
           {screen === "vault"     && <VaultScreen />}
           {screen === "approvals" && <ApprovalsScreen />}
           {screen === "voice"     && <VoiceScreen />}
+          {screen === "evals"     && <EvalsScreen />}
         </main>
       </div>
 
