@@ -14,6 +14,7 @@ import {
 import { useQuery, useMutation, useAction } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@convex/_generated/api";
+import astraLogo from "../assets/astra-logo.svg";
 
 // ── Convex helpers ───────────────────────────────────────────────────────────
 
@@ -178,6 +179,7 @@ function Sidebar({
   const journey = journeys?.[0];
   const bundle = useQuery(api.journeys.get, journey ? { id: journey._id } : "skip");
   const agents = bundle?.agents ?? [];
+  const approvalsPending = (bundle?.approvals ?? []).filter((a) => a.status === "pending").length;
   const workingCount = agents.filter((a) => a.status === "working").length;
   const statusText = !journey
     ? "No active journey"
@@ -193,15 +195,12 @@ function Sidebar({
       data-collapsed={collapsed}
     >
       {/* Brand */}
-      <div className="sidebar-header flex items-center gap-3 px-4 py-4 border-b border-[rgba(15,23,42,0.06)]">
-        <div className="sidebar-logo w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ background: "#0B192C" }}>
-          <span className="text-[#faf9f7] font-bold text-base" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>A</span>
-        </div>
-        <div className="sidebar-brand-copy min-w-0">
-          <span className="sidebar-brand-text block font-bold text-[#0B192C] text-lg" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>astra</span>
-          <div className="flex items-center gap-1.5 mt-1">
+      <div className="sidebar-header flex items-start gap-3 px-4 py-4 border-b border-[rgba(15,23,42,0.06)]">
+        <div className="sidebar-brand-copy min-w-0 flex-1">
+          <img src={astraLogo} alt="Astra" className="sidebar-brand-text block h-11 w-auto max-w-[168px]" />
+          <div className="sidebar-status-pill mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#E0FBFD] px-2.5 py-1">
             <PulseDot size="sm" color={workingCount > 0 ? "#16A34A" : "#94A3B8"} />
-            <span className="sidebar-status-text text-sm text-[#64748B] font-medium">{statusText}</span>
+            <span className="sidebar-status-text text-xs text-[#006064] font-medium">{statusText}</span>
           </div>
         </div>
         <button
@@ -238,8 +237,10 @@ function Sidebar({
                     >
                       <item.icon size={16} strokeWidth={active ? 2.5 : 1.75} />
                       <span className="sidebar-nav-label">{item.label}</span>
-                      {item.id === "approvals" && (
-                        <span className="sidebar-nav-badge ml-auto w-5 h-5 bg-[#FF6B6B] text-[#faf9f7] text-sm font-bold rounded-full flex items-center justify-center">1</span>
+                      {item.id === "approvals" && approvalsPending > 0 && (
+                        <span className="sidebar-nav-badge ml-auto min-w-5 h-5 px-1 bg-[#FF6B6B] text-[#faf9f7] text-xs font-bold rounded-full flex items-center justify-center">
+                          {approvalsPending}
+                        </span>
                       )}
                     </button>
                   );
@@ -374,12 +375,7 @@ function TopBar() {
       </div>
 
       <div className="responsive-header-brand flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#0284C7" }}>
-          <span className="text-[#faf9f7] font-bold text-sm" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>A</span>
-        </div>
-        <span className="font-bold text-[#0B192C] text-lg" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>
-          astra
-        </span>
+        <img src={astraLogo} alt="Astra" className="h-9 w-auto" />
       </div>
 
       <div className="responsive-topbar-actions relative flex items-center gap-3">

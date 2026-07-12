@@ -1,0 +1,57 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Astra logo mark</title>
+  <desc id="desc">A friendly glowing AI companion mark with a soft star-shaped body and bot face.</desc>
+  <defs>
+    <linearGradient id="bodyGradient" x1="19" y1="24" x2="78" y2="74" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A8EEFF"/>
+      <stop offset="0.42" stop-color="#258BFF"/>
+      <stop offset="1" stop-color="#7C3CFF"/>
+    </linearGradient>
+    <linearGradient id="rimGradient" x1="21" y1="20" x2="78" y2="78" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D8FBFF" stop-opacity="0.95"/>
+      <stop offset="0.45" stop-color="#52DFFF" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#956CFF" stop-opacity="0.85"/>
+    </linearGradient>
+    <linearGradient id="eyeGradient" x1="36" y1="39" x2="61" y2="57" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1DAAFF"/>
+      <stop offset="1" stop-color="#233BFF"/>
+    </linearGradient>
+    <filter id="softGlow" x="-45%" y="-45%" width="190%" height="190%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.1 0 0 0 0 0.66 0 0 0 0 1 0 0 0 0.55 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="faceShadow" x="-20%" y="-30%" width="140%" height="160%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="3" stdDeviation="2.5" flood-color="#192BFF" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#softGlow)">
+    <path
+      d="M48 10.5C56.8 10.5 59.5 25.8 66.2 30.3C73 34.8 87 31.1 90 39.4C93.1 47.9 79.7 55.2 77.3 63.1C75 70.9 80.9 84.2 73.8 89.3C66.6 94.5 55.8 83.9 47.5 83.9C39.3 83.9 28.5 94.4 21.4 89.1C14.4 83.9 20.4 70.7 18.1 62.9C15.8 55 2.5 47.5 5.6 39.1C8.7 30.8 22.7 34.7 29.5 30.1C36.3 25.5 39.2 10.5 48 10.5Z"
+      fill="url(#bodyGradient)"
+    />
+    <path
+      d="M48 11.8C56.1 11.8 58.6 26.5 65.4 31.1C72.2 35.6 85.9 32.1 88.7 39.8C91.5 47.5 78.5 54.8 76.1 62.7C73.8 70.4 79.4 83 73 87.7C66.4 92.5 55.8 82.6 47.5 82.6C39.4 82.6 28.8 92.4 22.2 87.5C15.8 82.7 21.5 70.2 19.3 62.5C17 54.6 4 47.3 6.8 39.6C9.6 31.9 23.3 35.5 30.2 30.9C37 26.3 39.9 11.8 48 11.8Z"
+      stroke="url(#rimGradient)"
+      stroke-width="2.4"
+      opacity="0.95"
+    />
+
+    <ellipse cx="48" cy="50" rx="27.8" ry="17.6" fill="#FBFDFF" filter="url(#faceShadow)"/>
+    <ellipse cx="48" cy="50" rx="25.3" ry="15.3" stroke="#273CFF" stroke-opacity="0.75" stroke-width="1.7"/>
+
+    <circle cx="37.7" cy="50" r="5.7" fill="url(#eyeGradient)" stroke="#0C4DFF" stroke-width="1.1"/>
+    <circle cx="58.3" cy="50" r="5.7" fill="url(#eyeGradient)" stroke="#0C4DFF" stroke-width="1.1"/>
+    <circle cx="39.1" cy="47.6" r="2.1" fill="#F7FBFF"/>
+    <circle cx="59.7" cy="47.6" r="2.1" fill="#F7FBFF"/>
+
+    <circle cx="25.5" cy="62.5" r="1.4" fill="#E9FBFF" opacity="0.9"/>
+    <circle cx="31.5" cy="68.2" r="1.2" fill="#E9FBFF" opacity="0.7"/>
+    <circle cx="72.5" cy="63.5" r="1.5" fill="#FFF6FF" opacity="0.95"/>
+    <circle cx="66.3" cy="31.5" r="1.5" fill="#D7E4FF" opacity="0.75"/>
+  </g>
+</svg>

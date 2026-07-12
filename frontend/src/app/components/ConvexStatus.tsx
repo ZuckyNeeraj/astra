@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
-import { Bot, X } from "lucide-react";
+import { X } from "lucide-react";
+import astraBot from "../../assets/astra-bot.svg";
 import { api } from "@convex/_generated/api";
 
 /**
@@ -68,7 +69,7 @@ export function ConvexStatus() {
         title={connected ? "Live from Convex" : "Connecting…"}
         className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-[rgba(15,23,42,0.1)] bg-[#faf9f7] text-[#0B192C] shadow-lg transition hover:-translate-y-0.5 hover:bg-[#EEEAE2]"
       >
-        <Bot size={20} />
+        <img src={astraBot} alt="Astra" className="h-10 w-auto" />
         <span
           className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-[#faf9f7]"
           style={{ backgroundColor: connected ? "#16A34A" : "#D97706" }}
