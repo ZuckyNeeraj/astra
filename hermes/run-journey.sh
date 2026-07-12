@@ -24,20 +24,28 @@ HDR="You are a specialist agent in the Astra healthcare-journey system. Use the 
 
 runagent () { hermes --yolo -z "$1" || echo "  (agent errored — continuing)"; }
 
-# 1. Find a pending plan (deterministic; convex CLI already targets dev).
-PENDING="$(npx convex run agentTools:orchestration_pending '{}' 2>/dev/null)"
-PLANID="$(printf '%s' "$PENDING" | grep -o '"planId": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
-if [ -z "${PLANID:-}" ]; then echo "Nothing pending to orchestrate."; exit 0; fi
+# 1. Find what to work on — a new proposed plan OR a UI-approved journey whose
+#    specialists still need to run (deterministic; convex CLI targets dev).
+TARGET="$(npx convex run agentTools:orchestrationTarget '{}' 2>/dev/null)"
+MODE="$(printf '%s' "$TARGET"  | grep -o '"mode": *"[^"]*"'                 | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"
+if [ -z "${MODE:-}" ] || [ "$MODE" = "none" ]; then echo "Nothing to orchestrate."; exit 0; fi
 
-PROC="$(printf '%s' "$PENDING"   | grep -o '"recommendedProcedure": *"[^"]*"' | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"
-PATIENT="$(printf '%s' "$PENDING"| grep -o '"patientName": *"[^"]*"'          | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"
-COND="$(printf '%s' "$PENDING"   | grep -o '"condition": *"[^"]*"'            | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"
-COST="$(printf '%s' "$PENDING"   | grep -o '"estCostInr": *[0-9]*'            | head -1 | grep -o '[0-9]*')"
-echo "▶ Orchestrating: $PATIENT — $PROC (plan $PLANID)"
+PROC="$(printf '%s' "$TARGET"   | grep -o '"recommendedProcedure": *"[^"]*"' | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"
+PATIENT="$(printf '%s' "$TARGET"| grep -o '"patientName": *"[^"]*"'          | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"
+COND="$(printf '%s' "$TARGET"   | grep -o '"condition": *"[^"]*"'            | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"
+COST="$(printf '%s' "$TARGET"   | grep -o '"estCostInr": *[0-9]*'            | head -1 | grep -o '[0-9]*')"
 
-# 2. Start the journey (deterministic scaffolding: creates journey + seeds agents).
-JID="$(npx convex run agentTools:startJourneyFromPlan "{\"planId\":\"$PLANID\"}" 2>/dev/null | tr -d '"')"
-if [ -z "${JID:-}" ]; then echo "Failed to start journey."; exit 1; fi
+if [ "$MODE" = "start" ]; then
+  PLANID="$(printf '%s' "$TARGET" | grep -o '"planId": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+  echo "▶ Orchestrating (new): $PATIENT — $PROC (plan $PLANID)"
+  # Start the journey (deterministic scaffolding: creates journey + seeds agents).
+  JID="$(npx convex run agentTools:startJourneyFromPlan "{\"planId\":\"$PLANID\"}" 2>/dev/null | tr -d '"')"
+else
+  # continue: journey already exists (approved in the UI) — just run its specialists.
+  JID="$(printf '%s' "$TARGET" | grep -o '"journeyId": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+  echo "▶ Orchestrating (continue): $PATIENT — $PROC (journey $JID)"
+fi
+if [ -z "${JID:-}" ]; then echo "Failed to resolve journey."; exit 1; fi
 echo "▶ Journey: $JID"
 
 # 3. Run each specialist as its own Hermes call.

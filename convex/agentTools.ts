@@ -52,6 +52,45 @@ export const orchestration_pending = query({
   },
 });
 
+// ── orchestrationTarget — what the driver should work on next ────────────────
+// Returns EITHER a proposed plan to start fresh, OR an already-approved journey
+// (e.g. approved in the UI) whose specialists haven't run yet. Lets the Hermes
+// driver continue a UI-approved journey instead of only picking up new plans.
+export const orchestrationTarget = query({
+  args: {},
+  handler: async (ctx) => {
+    // 1) A proposed plan → start a new journey.
+    const plans = await ctx.db.query("treatmentPlans").take(200);
+    const proposed = plans.find((p) => p.status === "proposed");
+    if (proposed) {
+      const report = proposed.reportId ? await ctx.db.get(proposed.reportId) : null;
+      return {
+        mode: "start", planId: proposed._id, journeyId: null,
+        recommendedProcedure: proposed.recommendedProcedure, estCostInr: proposed.estCostInr ?? null,
+        patientName: report?.patientName ?? "Patient", condition: report?.condition ?? "See report",
+      };
+    }
+    // 2) An active journey with specialists still pending → continue it.
+    const journeys = await ctx.db.query("journeys").take(200);
+    for (const j of journeys.filter((x) => x.status === "active")) {
+      const agents = await ctx.db
+        .query("agents")
+        .withIndex("by_journey", (q) => q.eq("journeyId", j._id))
+        .collect();
+      if (agents.some((a) => a.status === "pending")) {
+        const plan = plans.find((p) => p.journeyId === j._id);
+        return {
+          mode: "continue", planId: null, journeyId: j._id,
+          recommendedProcedure: plan?.recommendedProcedure ?? j.title,
+          estCostInr: plan?.estCostInr ?? null,
+          patientName: j.patientName, condition: j.condition,
+        };
+      }
+    }
+    return { mode: "none", planId: null, journeyId: null, recommendedProcedure: null, estCostInr: null, patientName: null, condition: null };
+  },
+});
+
 // ── Start a journey from a proposed plan (orchestrator's version of approve) ──
 // Mirrors treatment.approve but auth-free: the trusted orchestrator supplies the
 // planId. Creates the journey, seeds the specialist agents, links the report,

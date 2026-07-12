@@ -92,20 +92,23 @@ async function startApprovedJourney(
       status: "active",
     });
 
-    // Seed the specialist agents (matches the orchestrator's roster).
+    // Seed the specialist agents. Planner + Health Vault have already done their
+    // part (planned the journey, read the docs) → "done". The specialists are
+    // "pending" until the Hermes agent team runs (bash hermes/run-journey.sh).
     const agents = [
-      { name: "Planner Agent",      role: "Journey Orchestrator", status: "working" as const, progress: 15 },
+      { name: "Planner Agent",      role: "Journey Orchestrator", status: "done" as const,    progress: 100 },
       { name: "Health Vault Agent", role: "Records Analyst",      status: "done" as const,    progress: 100 },
       { name: "Insurance Agent",    role: "Coverage Specialist",  status: "pending" as const, progress: 0 },
       { name: "Hospital Agent",     role: "Facility Coordinator", status: "pending" as const, progress: 0 },
       { name: "Document Agent",     role: "Records Manager",      status: "pending" as const, progress: 0 },
       { name: "Claim Agent",        role: "Claims Filer",         status: "pending" as const, progress: 0 },
+      { name: "Notification Agent", role: "Family Liaison",       status: "pending" as const, progress: 0 },
     ];
     for (const a of agents) await ctx.db.insert("agents", { journeyId, ...a });
 
     await ctx.db.insert("activity", {
       journeyId, agentName: "Planner Agent",
-      message: `Journey started — approved plan: ${plan.recommendedProcedure}`,
+      message: `Journey planned — approved ${plan.recommendedProcedure}, specialist team queued`,
       kind: "success", createdAt: Date.now(),
     });
 

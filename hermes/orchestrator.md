@@ -27,6 +27,10 @@ them all. Only produce text output at the very end (the STEP 4 summary). If a to
 report that one error and stop; otherwise keep executing.
 
 ## Convex functions (functionName → purpose)
+- `agentTools:orchestrationTarget` `{}` → `{ mode, planId?, journeyId?, recommendedProcedure,
+  estCostInr, patientName, condition }`. `mode:"start"` → call startJourneyFromPlan with planId;
+  `mode:"continue"` → journey already exists (approved in the UI), run its specialists on journeyId;
+  `mode:"none"` → nothing to do. (run-journey.sh uses this.)
 - `agentTools:orchestration_pending` `{}` → array of proposed plans needing a run. Each item:
   `planId, reportId, userId, recommendedProcedure, estCostInr, patientName, patientAge,
   condition, diagnosis, summary`.
