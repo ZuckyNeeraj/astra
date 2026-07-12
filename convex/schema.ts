@@ -117,6 +117,7 @@ export default defineSchema({
     why: v.optional(v.string()),           // one line: why this hospital
     source: v.optional(v.string()),        // sourced URL from Linkup
     recommended: v.optional(v.boolean()),
+    selected: v.optional(v.boolean()),     // the one the user chose
     createdAt: v.number(),
   }).index("by_journey", ["journeyId"]),
 

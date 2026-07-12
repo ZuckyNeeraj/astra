@@ -1009,6 +1009,12 @@ function HospitalsScreen() {
   const journey = useQuery(api.journeys.listActive)?.[0];
   const bundle = useQuery(api.journeys.get, journey ? { id: journey._id } : "skip");
   const setLocation = useMutation(api.users.setLocation);
+  const selectHospitalMut = useMutation(api.hospitals.select);
+  const [selecting, setSelecting] = useState(false);
+  async function selectHospital(args: { hospitalId: any }) {
+    setSelecting(true);
+    try { await selectHospitalMut(args); } finally { setSelecting(false); }
+  }
 
   const loc = me?.location ?? null;
   const cityLabel = loc?.city ? [loc.city, loc.region].filter(Boolean).join(", ") : null;
@@ -1086,7 +1092,8 @@ function HospitalsScreen() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
                       <h3 className="font-medium text-[#0B192C]">{h.name}</h3>
-                      {h.recommended && <span className="text-sm font-bold bg-[#F0FDF4] text-[#16A34A] px-2 py-0.5 rounded-full">RECOMMENDED</span>}
+                      {h.selected && <span className="text-sm font-bold bg-[#0284C7] text-[#faf9f7] px-2 py-0.5 rounded-full">SELECTED</span>}
+                      {h.recommended && !h.selected && <span className="text-sm font-bold bg-[#F0FDF4] text-[#16A34A] px-2 py-0.5 rounded-full">RECOMMENDED</span>}
                     </div>
                     {h.rating != null && (
                       <div className="flex items-center gap-1.5">
@@ -1156,6 +1163,18 @@ function HospitalsScreen() {
                       className="inline-flex items-center gap-1.5 text-sm font-bold text-[#0284C7] hover:underline">
                       <ArrowRight size={13} /> Source
                     </a>
+                  )}
+
+                  {sel.selected ? (
+                    <div className="mt-5 flex items-center justify-center gap-2 py-3 bg-[#F0FDF4] rounded-xl border border-[#D1FAE5]">
+                      <CheckCircle2 size={16} className="text-[#16A34A]" />
+                      <span className="text-sm font-bold text-[#16A34A]">Selected — sent to Approval Center</span>
+                    </div>
+                  ) : (
+                    <button onClick={() => void selectHospital({ hospitalId: sel._id })} disabled={selecting}
+                      className="mt-5 w-full bg-[#0284C7] hover:bg-[#0B192C] text-[#faf9f7] font-bold py-3 rounded-xl transition-colors disabled:opacity-60">
+                      {selecting ? "Selecting…" : "Select this hospital"}
+                    </button>
                   )}
                 </div>
               </div>
