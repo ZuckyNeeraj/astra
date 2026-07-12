@@ -119,8 +119,8 @@ echo "▶ Notification Agent (ElevenLabs voice)…"
 runagent "$HDR
 You are the Notification Agent for journeyId $JID (patient $PATIENT, $PROC). You give the family a spoken update.
 Do: (1) run agentTools:setAgent {journeyId:'$JID', name:'Notification Agent', status:'working', progress:80};
-(2) run notify:notifyFamily {journeyId:'$JID', message:'<a warm 2-3 sentence spoken update for the family: patient, procedure, that hospitals were found, insurance checked, and the claim filed — plain language>'} — this really generates the voice message;
-(3) from the result, run agentTools:logStep {journeyId:'$JID', agentName:'Notification Agent', message:'Family notified (voice <voiceStatus>)', kind:'action', tokens:<~180>, costUsd:<~0.001>};
+(2) run notify:notifyFamily {journeyId:'$JID', message:'<a warm 2-3 sentence spoken update for the family: patient, procedure, that hospitals were found, insurance checked, and the claim filed — plain language>'} — this really SPEAKS (ElevenLabs) AND EMAILS the update to the user;
+(3) from the result, run agentTools:logStep {journeyId:'$JID', agentName:'Notification Agent', message:'Family notified — voice <voiceStatus>, email <emailStatus> to <toEmail>', kind:'action', tokens:<~180>, costUsd:<~0.001>};
 (4) run agentTools:patchJourney {journeyId:'$JID', progress:60};
 (5) run agentTools:setAgent {journeyId:'$JID', name:'Notification Agent', status:'done', progress:100}."
 

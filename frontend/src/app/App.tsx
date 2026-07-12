@@ -1717,12 +1717,20 @@ function VoiceScreen() {
             {notifications.map((n) => (
               <div key={n._id} className="bg-[#faf9f7] rounded-2xl p-5 border border-[rgba(15,23,42,0.06)]">
                 <div className="flex items-center justify-between mb-2">
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full tracking-widest ${n.voiceStatus === "spoken" ? "bg-[#F0FDF4] text-[#16A34A]" : n.voiceStatus === "failed" ? "bg-[#FEF2F2] text-[#FF6B6B]" : "bg-[#FFFBEB] text-[#D97706]"}`}>
-                    {n.voiceStatus === "spoken" ? "SPOKEN" : n.voiceStatus === "failed" ? "VOICE FAILED" : "TEXT ONLY"}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full tracking-widest ${n.voiceStatus === "spoken" ? "bg-[#F0FDF4] text-[#16A34A]" : n.voiceStatus === "failed" ? "bg-[#FEF2F2] text-[#FF6B6B]" : "bg-[#FFFBEB] text-[#D97706]"}`}>
+                      {n.voiceStatus === "spoken" ? "SPOKEN" : n.voiceStatus === "failed" ? "VOICE FAILED" : "TEXT ONLY"}
+                    </span>
+                    {n.emailStatus && (
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full tracking-widest ${n.emailStatus === "sent" ? "bg-[#F0FDF4] text-[#16A34A]" : n.emailStatus === "failed" ? "bg-[#FEF2F2] text-[#FF6B6B]" : "bg-[#FFFBEB] text-[#D97706]"}`}>
+                        {n.emailStatus === "sent" ? "EMAILED" : n.emailStatus === "failed" ? "EMAIL FAILED" : "EMAIL RECORDED"}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[11px] text-[#94A3B8] font-mono">{new Date(n.createdAt).toLocaleString("en-IN")}</span>
                 </div>
                 <p className="text-sm text-[#0B192C] mb-3">{n.text}</p>
+                {n.toEmail && <p className="text-[11px] text-[#94A3B8] font-mono mb-2">emailed to {n.toEmail}</p>}
                 {n.audioUrl && <audio controls src={n.audioUrl} className="w-full" />}
               </div>
             ))}

@@ -58,8 +58,8 @@ report that one error and stop; otherwise keep executing.
   why?, source?, recommended?}, … ] }` — record SEVERAL hospitals in one call (prefer this).
 - `agentTools:fileClaim` `{ journeyId, hospitalName?, amountInr?, insurer?, policyNumber?, summary }`
   → `{ ok, emailStatus, employerPortalRef, reason? }` — really files the claim (email + employer portal).
-- `notify:notifyFamily` `{ journeyId, message }` → `{ ok, voiceStatus, reason? }` — really speaks a
-  family update via ElevenLabs and stores the audio (note: module is `notify`, not `agentTools`).
+- `notify:notifyFamily` `{ journeyId, message }` → `{ ok, voiceStatus, emailStatus, toEmail, reason? }`
+  — really SPEAKS the update (ElevenLabs, stored audio) AND EMAILS it to the journey owner (Resend).
 
 ## Procedure
 STEP 0. Call `status` (above) and capture the dev `deploymentSelector`.

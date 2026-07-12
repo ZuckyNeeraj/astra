@@ -204,6 +204,10 @@ export default defineSchema({
       v.literal("failed"),
     ),
     audioStorageId: v.optional(v.id("_storage")),
+    emailStatus: v.optional(    // email leg (Resend) — to the journey owner
+      v.union(v.literal("sent"), v.literal("recorded"), v.literal("failed")),
+    ),
+    toEmail: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_journey", ["journeyId"]),
 
