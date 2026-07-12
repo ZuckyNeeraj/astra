@@ -1,19 +1,22 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuthActions } from "@convex-dev/auth/react";
+import astraLogo from "../../assets/astra-logo.svg";
+import { DEMO_EMAIL, DEMO_PASSWORD } from "../demoAuth";
 
 // Email + password sign-in / sign-up, backed by Convex Auth.
-export function SignIn() {
+export function SignIn({ demoMode = false }: { demoMode?: boolean }) {
   const { signIn } = useAuthActions();
   const [flow, setFlow] = useState<"signIn" | "signUp">("signIn");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(demoMode ? DEMO_EMAIL : "");
+  const [password, setPassword] = useState(demoMode ? DEMO_PASSWORD : "");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const autoSubmitted = useRef(false);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submit(e?: React.FormEvent) {
+    e?.preventDefault();
     setBusy(true);
     setError(null);
     try {
@@ -29,6 +32,15 @@ export function SignIn() {
     }
   }
 
+  useEffect(() => {
+    if (!demoMode || autoSubmitted.current) return;
+    autoSubmitted.current = true;
+    const timer = window.setTimeout(() => {
+      void submit();
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [demoMode]);
+
   return (
     <div
       className="min-h-[100dvh] flex items-center justify-center px-4 py-6 sm:px-6"
@@ -37,26 +49,25 @@ export function SignIn() {
       <div className="w-full max-w-md bg-[#faf9f7] rounded-3xl border border-[rgba(15,23,42,0.08)] shadow-sm p-6 sm:p-8">
         {/* Logo */}
         <div className="flex items-center gap-2.5 mb-6 sm:mb-7">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: "linear-gradient(135deg,#0284C7,#0284C7)" }}
-          >
-            <span className="text-[#faf9f7] font-bold" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>A</span>
-          </div>
-          <span
-            className="font-bold text-[#0B192C] text-lg sm:text-xl"
-            style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
-          >
-            astra
-          </span>
+          <img src={astraLogo} alt="Astra" className="h-10 w-auto" />
         </div>
 
         <h1 className="text-[21px] sm:text-2xl font-medium text-[#0B192C]" style={{ fontFamily: '"Ivar Display", Georgia, "Times New Roman", serif' }}>
           {flow === "signIn" ? "Welcome back" : "Create your account"}
         </h1>
         <p className="text-sm text-[#64748B] mt-1 mb-5 sm:mb-6">
-          {flow === "signIn" ? "Sign in to your healthcare journey." : "Start managing a healthcare journey."}
+          {demoMode
+            ? "Demo sign-in — opening your healthcare journey…"
+            : flow === "signIn"
+              ? "Sign in to your healthcare journey."
+              : "Start managing a healthcare journey."}
         </p>
+
+        {demoMode && (
+          <div className="mb-4 rounded-xl border border-[#00E5FF]/30 bg-[#E0FBFD] px-3 py-2 text-xs font-medium text-[#006064]">
+            Scan-to-demo: credentials prefilled for judges.
+          </div>
+        )}
 
         <form onSubmit={submit} className="flex flex-col gap-3">
           <input

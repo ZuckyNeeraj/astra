@@ -52,7 +52,6 @@
 }
 
 .app-sidebar[data-collapsed="true"] .sidebar-brand-copy,
-.app-sidebar[data-collapsed="true"] .sidebar-logo,
 .app-sidebar[data-collapsed="true"] .sidebar-section-label,
 .app-sidebar[data-collapsed="true"] .sidebar-nav-label,
 .app-sidebar[data-collapsed="true"] .sidebar-nav-badge,
@@ -160,7 +159,6 @@
   }
 
   .app-sidebar[data-collapsed="true"] .sidebar-brand-copy,
-  .app-sidebar[data-collapsed="true"] .sidebar-logo,
   .app-sidebar[data-collapsed="true"] .sidebar-section-label,
   .app-sidebar[data-collapsed="true"] .sidebar-nav-label,
   .app-sidebar[data-collapsed="true"] .sidebar-nav-badge,

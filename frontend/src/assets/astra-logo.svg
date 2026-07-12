@@ -1,0 +1,45 @@
+<svg width="300" height="84" viewBox="0 0 300 84" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Astra logo</title>
+  <desc id="desc">Astra wordmark with friendly glowing AI companion mark.</desc>
+  <defs>
+    <linearGradient id="bodyGradient" x1="10" y1="12" x2="66" y2="68" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A8EEFF"/>
+      <stop offset="0.42" stop-color="#258BFF"/>
+      <stop offset="1" stop-color="#7C3CFF"/>
+    </linearGradient>
+    <linearGradient id="rimGradient" x1="12" y1="12" x2="66" y2="70" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D8FBFF" stop-opacity="0.95"/>
+      <stop offset="0.45" stop-color="#52DFFF" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#956CFF" stop-opacity="0.85"/>
+    </linearGradient>
+    <linearGradient id="eyeGradient" x1="29" y1="33" x2="52" y2="52" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1DAAFF"/>
+      <stop offset="1" stop-color="#233BFF"/>
+    </linearGradient>
+    <filter id="softGlow" x="-45%" y="-45%" width="190%" height="190%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.1 0 0 0 0 0.66 0 0 0 0 1 0 0 0 0.48 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="faceShadow" x="-20%" y="-30%" width="140%" height="160%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2" flood-color="#192BFF" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#softGlow)">
+    <path d="M40 7.8C47.4 7.8 49.7 20.7 55.4 24.5C61.1 28.3 72.9 25.2 75.4 32.2C78 39.3 66.7 45.4 64.7 52.1C62.8 58.7 67.7 69.9 61.8 74.2C55.8 78.5 46.7 69.7 39.7 69.7C32.8 69.7 23.7 78.5 17.8 74.1C11.9 69.7 16.9 58.6 15 52C13.1 45.3 1.9 39 4.5 31.9C7.1 25 18.9 28.2 24.6 24.4C30.3 20.5 32.6 7.8 40 7.8Z" fill="url(#bodyGradient)"/>
+    <path d="M40 9C46.8 9 48.9 21.3 54.7 25.2C60.4 29 71.9 26.1 74.2 32.6C76.6 39.1 65.7 45.2 63.6 51.8C61.7 58.3 66.4 68.9 61 72.9C55.4 76.9 46.7 68.5 39.7 68.5C32.9 68.5 24 76.8 18.6 72.7C13.2 68.7 18 58.1 16.1 51.6C14.2 45 3.3 38.9 5.7 32.4C8.1 25.9 19.6 28.9 25.3 25.1C31.1 21.2 33.2 9 40 9Z" stroke="url(#rimGradient)" stroke-width="2" opacity="0.95"/>
+    <ellipse cx="40" cy="41" rx="23.3" ry="14.8" fill="#FBFDFF" filter="url(#faceShadow)"/>
+    <ellipse cx="40" cy="41" rx="21.3" ry="12.9" stroke="#273CFF" stroke-opacity="0.75" stroke-width="1.4"/>
+    <circle cx="31.4" cy="41" r="4.8" fill="url(#eyeGradient)" stroke="#0C4DFF" stroke-width="0.9"/>
+    <circle cx="48.6" cy="41" r="4.8" fill="url(#eyeGradient)" stroke="#0C4DFF" stroke-width="0.9"/>
+    <circle cx="32.6" cy="39" r="1.8" fill="#F7FBFF"/>
+    <circle cx="49.8" cy="39" r="1.8" fill="#F7FBFF"/>
+  </g>
+
+  <text x="94" y="47" fill="#0B192C" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="40" font-weight="700" letter-spacing="0">Astra</text>
+  <text x="96" y="68" fill="#64748B" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="500" letter-spacing="0">AI Healthcare Journey OS</text>
+</svg>

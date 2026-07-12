@@ -1,0 +1,67 @@
+<svg width="220" height="220" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">
+
+<style>
+.eye{
+transform-origin:center;
+animation:blink 2s infinite;
+}
+
+@keyframes blink{
+0%,45%,48%,100%{
+transform:scaleY(1);
+}
+46%,47%{
+transform:scaleY(0.08);
+}
+}
+
+.glow{
+animation:glow 1.5s infinite alternate;
+}
+
+@keyframes glow{
+from{
+opacity:.5;
+}
+to{
+opacity:1;
+}
+}
+</style>
+
+<defs>
+
+<linearGradient id="body" x1="0%" y1="0%" x2="100%" y2="100%">
+<stop offset="0%" stop-color="#41C9FF"></stop>
+<stop offset="100%" stop-color="#4D5BFF"></stop>
+</linearGradient>
+
+<filter id="shadow">
+<feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#4D5BFF" flood-opacity=".35"></feDropShadow>
+</filter>
+
+</defs>
+
+<g class="float">
+
+<circle cx="110" cy="110" r="72" fill="#EAF6FF" class="glow"></circle>
+
+<rect x="55" y="55" rx="38" ry="38" width="110" height="110" fill="url(#body)" filter="url(#shadow)"></rect>
+
+<ellipse cx="110" cy="112" rx="44" ry="28" fill="white"></ellipse>
+
+<circle cx="92" cy="112" r="8" fill="#2563EB" class="eye"></circle>
+
+<circle cx="128" cy="112" r="8" fill="#2563EB" class="eye"></circle>
+
+<circle cx="92" cy="109" r="2.5" fill="white"></circle>
+
+<circle cx="128" cy="109" r="2.5" fill="white"></circle>
+
+<line x1="110" y1="45" x2="110" y2="58" stroke="#4D5BFF" stroke-width="5"></line>
+
+<circle cx="110" cy="40" r="7" fill="#4D5BFF"></circle>
+
+</g>
+
+</svg>
