@@ -172,6 +172,21 @@ function Sidebar({
     { key: "tools",   label: "TOOLS"          },
   ];
 
+  // Real agent status for the active journey (matches the Agents screen: an
+  // "active" agent is one whose status is "working").
+  const journeys = useQuery(api.journeys.listActive);
+  const journey = journeys?.[0];
+  const bundle = useQuery(api.journeys.get, journey ? { id: journey._id } : "skip");
+  const agents = bundle?.agents ?? [];
+  const workingCount = agents.filter((a) => a.status === "working").length;
+  const statusText = !journey
+    ? "No active journey"
+    : agents.length === 0
+    ? "Setting up…"
+    : workingCount > 0
+    ? `${workingCount} of ${agents.length} agents active`
+    : `${agents.length} agents · idle`;
+
   return (
     <aside
       className="app-sidebar h-screen flex flex-col bg-[#faf9f7] border-r border-[rgba(15,23,42,0.07)] overflow-y-auto flex-shrink-0"
@@ -185,8 +200,8 @@ function Sidebar({
         <div className="sidebar-brand-copy min-w-0">
           <span className="sidebar-brand-text block font-bold text-[#0B192C] text-lg" style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>astra</span>
           <div className="flex items-center gap-1.5 mt-1">
-            <PulseDot size="sm" />
-            <span className="sidebar-status-text text-sm text-[#64748B] font-medium">4 agents active</span>
+            <PulseDot size="sm" color={workingCount > 0 ? "#16A34A" : "#94A3B8"} />
+            <span className="sidebar-status-text text-sm text-[#64748B] font-medium">{statusText}</span>
           </div>
         </div>
         <button
